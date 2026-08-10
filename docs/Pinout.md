@@ -1,4 +1,4 @@
-# EFWS — Pinout & Wiring Reference
+# EFWS — out & Wiring Reference
 
 Hardware final:
 **Raspberry Pi 4 · MCP3008 (SPI ADC 8-ch) · 1x Logic Level Converter (min. 6-channel)

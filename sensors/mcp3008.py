@@ -57,7 +57,7 @@ class MCP3008:
         if not 0 <= channel <= 7:
             raise ValueError("MCP3008 channel harus 0-7")
         cmd = [1, (8 + channel) << 4, 0]
-        resp = self.spi.xfer2(cmd)
+        resp = self.spi.xfzer2(cmd)
         value = ((resp[1] & 3) << 8) + resp[2]
         return value
 
