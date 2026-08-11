@@ -1,19 +1,19 @@
 # EFWS Architecture Overview
 
 ```
-                         ┌───────────────────────────┐
+                         ┌─────────────────────────── ┐
                          │   Solar 80-100W + LiFePO4  │
                          │   + Voltage Sensor Module  │
-                         └─────────────┬─────────────┘
+                         └─────────────┬───────────── ┘
                                        5V/12V/loop
                                         │
-┌──────────────┐   I2C   ┌─────────────▼─────────────┐   GPIO    ┌────────────┐
+┌──────────────┐   I2C   ┌─────────────▼───────────── ┐   GPIO    ┌────────────┐
 │ BME280       │◄───────►│                            │──────────►│ Relay 5V   │──►12V Siren
-│              │         │      Raspberry Pi 4        │           └────────────┘
+│ GY-MS5837    │         │      Raspberry Pi 4        │           └────────────┘
 ├──────────────┤  SPI    │      (main.py orchestrator)│
 │ MCP3008 ADC  │◄───────►│                            │
-│ (MQ-2/MQ-135/│         │                            │
-│  Soil x2/    │         │                            │
+│              │         │                            │
+│ (Soil x2/    │         │                            │
 │  Pressure/   │         │                            │
 │  Battery)    │         │                            │
 └──────────────┘         │                            │
@@ -21,7 +21,7 @@
 │ RS485        │◄───────►│                            │───────────►│ A7670E /    │──► 4G Network
 │ Anemometer   │         │                            │            │ SIM7600     │
 └──────────────┘         └─────────────┬──────────────┘            │ (satu saja) │
-                                        │                           └─────────────┘
+                                        │                          └─────────────┘
                           ┌─────────────┴──────────────┐
                           │ 1) Simpan ke SQLite DULU    │
                           │ 2) Evaluasi lokal (siren)   │
@@ -29,14 +29,14 @@
                           │ 4) Gagal → antrian offline  │
                           └─────────────┬──────────────┘
                                         ▼
-                    EFWS_API_URL/sensors/telemetry (backend)
+                    EWS_API_URL/sensors/telemetry (backend)
                     ── backend yang menyimpan alarm level &
                        evaluasi threshold "resmi"
 ```
 
 ## Alur data (penting)
 
-1. **Baca** semua sensor tiap `EFWS_READ_INTERVAL` detik.
+1. **Baca** semua sensor tiap `EF\WS_READ_INTERVAL` detik.
 2. **Simpan ke SQLite dulu** (`sensor_readings`, sumber kebenaran lokal) —
    data tidak pernah hilang meski sinyal/koneksi sedang mati.
 3. **Evaluasi lokal** terhadap `config/thresholds.json` — HANYA dipakai

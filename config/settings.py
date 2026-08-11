@@ -78,23 +78,21 @@ BME280_ADDRESS = int(_opt("EFWS_BME280_ADDR", "0x76"), 16)
 # hanya satu yang dipasang).
 #
 #   LLC (HV=5V, LV=3.3V) — semua sensor analog 0-5V:
-#     HV-1 → LV-1 : MQ-2   AOUT                    → CH0
-#     HV-2 → LV-2 : MQ-135 AOUT                     → CH1
-#     HV-3 → LV-3 : Soil Surface AOUT                → CH2
-#     HV-4 → LV-4 : Soil Deep    AOUT                → CH3
-#     HV-5 → LV-5 : Pressure sensor (lewat R_BURDEN) → CH4
-#     HV-6 → LV-6 : Voltage Sensor Module OUT         → CH5
-#     HV-7..8 / CH6-CH7 : spare, tidak dikabel
+#     HV-1 → LV-1 : Soil Surface AOUT                     → CH0
+#     HV-2 → LV-2 : Soil Deep    AOUT                     → CH1
+#     HV-3 → LV-3 : Pressure sensor (lewat R_BURDEN)      → CH2
+#     HV-4 → LV-4 : Voltage Sensor Module OUT             → CH3
+#     HV-5..8 / CH4-CH7 : spare, tidak dikabel
 SPI_BUS          = _int("EFWS_SPI_BUS", 0)
 SPI_DEVICE       = _int("EFWS_SPI_DEVICE", 0)
 SPI_MAX_SPEED_HZ = _int("EFWS_SPI_SPEED", 1350000)
 MCP3008_VREF     = _float("EFWS_MCP3008_VREF", 3.3)
 
-ADC_CHANNEL_SOIL_SURFACE    = _int("EFWS_ADC_SOIL_SURFACE",  2)   # LLC HV-3 (probe 0-30cm)
-ADC_CHANNEL_SOIL_DEEP       = _int("EFWS_ADC_SOIL_DEEP",     3)   # LLC HV-4 (probe 30-60cm)
-ADC_CHANNEL_PRESSURE        = _int("EFWS_ADC_PRESSURE",      4)   # LLC HV-5 (pressure sensor via R_BURDEN)
-ADC_CHANNEL_BATTERY         = _int("EFWS_ADC_BATTERY",       5)   # LLC HV-6 (voltage sensor module OUT)
-# CH6-CH7 tidak dikabel — spare fisik di MCP3008
+ADC_CHANNEL_SOIL_SURFACE    = _int("EFWS_ADC_SOIL_SURFACE",  0)   # LLC HV-0 (probe 0-30cm)
+ADC_CHANNEL_SOIL_DEEP       = _int("EFWS_ADC_SOIL_DEEP",     1)   # LLC HV-1 (probe 30-60cm)
+ADC_CHANNEL_PRESSURE        = _int("EFWS_ADC_PRESSURE",      2)   # LLC HV-2 (pressure sensor via R_BURDEN)
+ADC_CHANNEL_BATTERY         = _int("EFWS_ADC_BATTERY",       3)   # LLC HV-3 (voltage sensor module OUT)
+# CH4-CH7 tidak dikabel — spare fisik di MCP3008
 
 # ─── Gravity Rainfall Sensor (DFRobot SEN0575) ─────────────────────────────
 I2C_BUS = 1
