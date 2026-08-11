@@ -46,18 +46,6 @@ logging.basicConfig(
 logger = logging.getLogger("efws.main")
 
 
-# ─── smokeLevel calculator ────────────────────────────────────────
-def _calc_smoke_level(mq2_ppm: float, mq135_ppm: float) -> float:
-    """
-    Gabungkan MQ-2 dan MQ-135 menjadi satu persentase 0-100%.
-    Formula: (mq2/MQ2_CRIT * W_MQ2 + mq135/MQ135_CRIT * W_MQ135) * 100
-    """
-    n2   = min(mq2_ppm   / settings.SMOKE_MQ2_CRIT_PPM,   1.5)
-    n135 = min(mq135_ppm / settings.SMOKE_MQ135_CRIT_PPM, 1.5)
-    raw  = (n2 * settings.SMOKE_WEIGHT_MQ2 + n135 * settings.SMOKE_WEIGHT_MQ135) * 100
-    return round(min(raw, 100.0), 2)
-
-
 # ─── SIM factory (auto-detect A7670E atau SIM7600) ───────────────
 def _load_sim():
     from communication.sim_detector import detect_sim
@@ -75,39 +63,26 @@ def _load_sensors_and_alarm():
     if settings.RUN_MODE == "mock":
         logger.info("Mode: MOCK — sensor disimulasi, tidak ada akses GPIO/I2C")
         from sensors.mock_sensors import (
-            MockMQ2, MockMQ135, MockBME280, MockPressureWater,
-            MockSoilMoisture, MockAnemometer, MockBattery,
+            MockPressureWater, MockSoilMoisture, MockRainfall,
             MockAlarmController,
         )
         return {
-            "mq2":      MockMQ2(),
-            "mq135":    MockMQ135(),
-            "bme280":   MockBME280(),
             "pressure": MockPressureWater(),
             "soil":     MockSoilMoisture(),
-            "wind":     MockAnemometer(),
-            "battery":  MockBattery(),
+            "rain":     MockRainfall(),
         }, MockAlarmController()
     else:
         logger.info("Mode: HARDWARE — mengakses GPIO/SPI/I2C nyata")
-        from sensors.mq2         import MQ2Sensor
-        from sensors.mq135       import MQ135Sensor
-        from sensors.bme280      import BME280Sensor
         from sensors.pressure    import PressureWaterSensor
         from sensors.soil        import SoilMoistureSensor
-        from sensors.anemometer  import AnemometerSensor
-        from sensors.battery     import BatterySensor
+        from sensors.rainfall    import RainfallSensor
         from sensors.null_sensor import NullSensor, NullAlarmController
         from alarm.siren         import AlarmController
 
         factories = {
-            "mq2":      MQ2Sensor,
-            "mq135":    MQ135Sensor,
-            "bme280":   BME280Sensor,
             "pressure": PressureWaterSensor,
             "soil":     SoilMoistureSensor,
-            "wind":     AnemometerSensor,
-            "battery":  BatterySensor,
+            "rain":     RainfallSensor,
         }
         sensors = {}
         for name, factory in factories.items():
@@ -238,8 +213,6 @@ class EFWS:
                 "source":     "gps",
                 "fix":        True,
             }
-            # Log eksplisit: modul mana, dan raw NMEA (kalau ada) sebagai bukti
-            # ini data LIVE dari hardware, bukan nilai lama/hasil cache.
             logger.info(
                 "📍 GPS FIX NYATA dari %s: lat=%.6f, lon=%.6f, alt=%sm%s",
                 module_name, result["lat"], result["lon"],
@@ -268,9 +241,6 @@ class EFWS:
             if isinstance(data[key], dict) and data[key].get("error"):
                 failed.append(key)
 
-        # Ringkasan per-siklus: sensor mana saja yang tidak terbaca/kosong
-        # siklus ini -> field-nya otomatis jadi 0/null di evaluasi & payload
-        # (lihat _exceeds, _calc_smoke_level, _build_telemetry_payload).
         if failed:
             logger.warning(
                 "⚠️ Sensor TIDAK TERBACA/KOSONG siklus ini (nilai=0/null): %s",
@@ -284,30 +254,22 @@ class EFWS:
         """
         Threshold aktif = merge remote config (dari response telemetry
         terakhir) dengan hardcoded lokal, per-field (lihat threshold_resolver).
-        Return: (any_triggered: bool, triggered: list[str], smoke_pct: float)
+        Return: (any_triggered: bool, triggered: list[str])
         """
         t = resolve_active_thresholds(self.hardcoded_thresholds, self.api.remote_config)
-
-        smoke_pct = _calc_smoke_level(
-            data["mq2"].get("ppm", 0),
-            data["mq135"].get("ppm", 0),
-        )
 
         surface = data["soil"].get("surface", {}).get("moisture_percent")
         deep    = data["soil"].get("deep", {}).get("moisture_percent")
 
         checks = {
-            "smoke":       _exceeds(smoke_pct, t["smokeDangerThreshold"], lower_is_worse=False),
-            "temperature": _exceeds(data["bme280"].get("temperature_c"), t["temperatureDangerThreshold"], lower_is_worse=False),
-            "humidity":    _exceeds(data["bme280"].get("humidity_percent"), t["humidityDangerThreshold"], lower_is_worse=True),
-            "water":       _exceeds(data["pressure"].get("depth_m"), t["waterDangerThreshold"], lower_is_worse=True),
+            "water":        _exceeds(data["pressure"].get("depth_m"), t["waterDangerThreshold"], lower_is_worse=True),
             "soil_surface": _exceeds(surface, t["soilMoistureDangerThreshold"]["surface"], lower_is_worse=True),
             "soil_deep":    _exceeds(deep,    t["soilMoistureDangerThreshold"]["deep"],    lower_is_worse=True),
-            "wind":        _exceeds(data["wind"].get("speed_ms"), t["windDangerThreshold"], lower_is_worse=False),
+            "rainfall":     _exceeds(data["rain"].get("rainfall_mm"), t.get("rainfallDangerThreshold"), lower_is_worse=False),
         }
 
         triggered = [k for k, v in checks.items() if v]
-        return (len(triggered) > 0), triggered, smoke_pct
+        return (len(triggered) > 0), triggered
 
     # ─── Payload builders (kontrak backend, endpoint 1/2/3/4) ────
     def _build_location_payload(self) -> dict:
@@ -318,12 +280,10 @@ class EFWS:
             "longitude":   self._location["lon"],
         }
 
-    def _build_telemetry_payload(self, data, smoke_pct) -> dict:
+    def _build_telemetry_payload(self, data) -> dict:
         soil     = data.get("soil", {})
-        bme      = data.get("bme280", {})
-        wind     = data.get("wind", {})
         pressure = data.get("pressure", {})
-        battery  = data.get("battery", {})
+        rain     = data.get("rain", {})
 
         timestamp = (
             datetime.now(ZoneInfo("Asia/Jakarta"))
@@ -338,25 +298,24 @@ class EFWS:
                 {
                     "timestamp": timestamp,
                     "waterLevel": pressure.get("depth_m"),
-                    "smokeLevel": smoke_pct,
-                    "temp": bme.get("temperature_c"),
-                    "humidity": bme.get("humidity_percent"),
                     "soilMoisture": {
                         "surface": soil.get("surface", {}).get("moisture_percent"),
                         "deep":    soil.get("deep", {}).get("moisture_percent"),
                     },
-                    "windSpeed": wind.get("speed_ms") if wind.get("speed_ms") is not None else 0,
-                    "batteryLevel": battery.get("percent"),
-                    "flameDetected": False,
+                    "rainfallMm": rain.get("rainfall_mm"),
                 }
             ],
         }
 
     def _build_heartbeat_payload(self, data) -> dict:
+        # NOTE: batteryLevel dulu diambil dari sensor battery yang sudah
+        # dihapus (bukan bagian dari 3 sensor: pressure/soil/rain). Kalau
+        # backend WAJIB terima batteryLevel numerik tiap heartbeat, kasih
+        # tau -- kita bisa tambah battery cuma buat keperluan heartbeat ini.
         return {
             "deviceId":     settings.DEVICE_ID,
             "deviceToken":  settings.DEVICE_TOKEN,
-            "batteryLevel": data.get("battery", {}).get("percent"),
+            "batteryLevel": None,
         }
 
     def _build_ack_payload(self, command_id: str, status: str, error: str = "") -> dict:
@@ -380,10 +339,8 @@ class EFWS:
             logger.warning("🔴 ALARM (lokal, sirine menyala) — %d bacaan berturut: %s",
                            self._critical_streak, triggered)
 
-    # ─── Kirim bundel Location + Telemetry + Heartbeat (dipakai baik oleh
-    # jalur emergency maupun jalur rutin -- satu-satunya tempat ketiganya
-    # dikirim, supaya tidak ada duplikasi logic) ───────────────────────
-    def _send_bundle(self, data, smoke_pct, reason: str):
+    # ─── Kirim bundel Location + Telemetry + Heartbeat ────────────
+    def _send_bundle(self, data, reason: str):
         logger.warning("📡 KIRIM (%s) -- Location + Telemetry + Heartbeat", reason)
 
         location_payload  = self._build_location_payload()
@@ -393,24 +350,15 @@ class EFWS:
             self._location.get("source"),
             "GPS asli" if self._location.get("source") == "gps" else "fallback config, BUKAN dari GPS",
         )
-        telemetry_payload = self._build_telemetry_payload(data, smoke_pct)
+        telemetry_payload = self._build_telemetry_payload(data)
         heartbeat_payload = self._build_heartbeat_payload(data)
 
-        # Simpan ke DB lokal SEBELUM dikirim (sumber kebenaran lokal, dan
-        # untuk audit -- full_payload berisi PERSIS body telemetry yang
-        # dikirim ke API). Baris ini otomatis dibersihkan tiap >3 hari oleh
-        # EFWS._retention_loop (lihat config.DB_RETENTION_DAYS).
         self.db.log_reading(data, telemetry_payload)
 
-        # Endpoint 1, 2, 3 dikirim bersamaan (tiap-tiap masuk offline queue
-        # sendiri kalau gagal karena jaringan/5xx).
         self.api.send_location(location_payload, db=self.db)
         self.api.send_telemetry(telemetry_payload, db=self.db)
         delivered_hb, commands = self.api.send_heartbeat(heartbeat_payload, db=self.db)
 
-        # Endpoint 4: HANYA jalan kalau heartbeat sukses DAN membawa
-        # command -- event-driven, bukan scheduled, berlaku sama baik
-        # bundel ini dipicu emergency maupun rutin.
         if delivered_hb and commands:
             self._process_commands(commands)
 
@@ -443,19 +391,10 @@ class EFWS:
 
     def _cmd_reboot(self):
         """
-        CATATAN ARSITEKTUR PENTING:
         Spec minta "execute -> wait until complete -> baru kirim ACK". Untuk
-        command Reboot ini SECARA TEKNIS TIDAK MUNGKIN dipenuhi literal:
-        begitu `systemctl restart efws.service` dieksekusi, proses Python
-        yang sedang jalan (proses ini sendiri) akan dibunuh SEBELUM sempat
-        mengirim ACK "setelah selesai".
-
-        Solusi yang dipakai: dispatch restart lewat proses child yang
-        DETACHED dengan delay singkat (EFWS_REBOOT_DELAY_SEC, default 5s),
-        lalu anggap "berhasil" begitu restart itu terjadwal (bukan setelah
-        restart benar-benar selesai) -- ACK SUCCESS dikirim oleh caller
-        (_process_commands) SEGERA setelah fungsi ini return, memberi waktu
-        ACK terkirim ke backend sebelum proses ini benar-benar mati.
+        command Reboot ini SECARA TEKNIS TIDAK MUNGKIN dipenuhi literal --
+        dispatch restart lewat proses child DETACHED dengan delay singkat,
+        ACK SUCCESS dikirim SEGERA oleh caller (_process_commands).
         """
         delay = settings.COMMAND_REBOOT_DELAY_SEC
         logger.warning("🔄 Reboot dijadwalkan %ds lagi (setelah ACK dikirim)...", delay)
@@ -482,42 +421,34 @@ class EFWS:
         )
         try:
             while True:
-                # 1) Baca semua sensor + GPS tiap siklus.
                 data = self._read_all()
                 self._update_gps()
 
-                # 2) Evaluasi threshold aktif (remote-first, fallback lokal per-field).
-                any_triggered, triggered, smoke_pct = self._evaluate(data)
+                any_triggered, triggered = self._evaluate(data)
 
-                # 3) Sirine lokal selalu dievaluasi real-time, independen dari
-                #    berhasil-tidaknya (atau terjadi-tidaknya) pengiriman ke backend.
                 self._handle_alarm(any_triggered, triggered)
 
                 now = time.time()
 
                 if any_triggered:
-                    # Darurat -- kirim SEKARANG, tidak menunggu jadwal rutin.
                     logger.warning("🚨 EMERGENCY -- threshold terlewati: %s", triggered)
-                    self._send_bundle(data, smoke_pct, reason="EMERGENCY")
-                    # Backend baru saja menerima laporan -- jadwal rutin
-                    # di-reset dari titik ini, supaya tidak dobel kirim
-                    # sesaat kemudian kalau kebetulan jadwal rutin jatuh dekat.
+                    self._send_bundle(data, reason="EMERGENCY")
                     self._last_routine_send = now
 
                 elif now - self._last_routine_send >= settings.ROUTINE_SEND_INTERVAL_SEC:
-                    # Normal, tapi sudah waktunya lapor rutin (device masih hidup).
-                    self._send_bundle(data, smoke_pct, reason="rutin")
+                    self._send_bundle(data, reason="rutin")
                     self._last_routine_send = now
 
                 else:
                     next_routine_in = int(settings.ROUTINE_SEND_INTERVAL_SEC - (now - self._last_routine_send))
                     logger.info(
                         "READ | semua nilai NORMAL — tidak kirim (kirim rutin berikutnya dalam %ds). "
-                        "smoke=%.1f%% temp=%.1f°C hum=%.1f%%",
+                        "water=%.2fm soil_surface=%.1f%% soil_deep=%.1f%% rain=%.1fmm",
                         next_routine_in,
-                        smoke_pct,
-                        data["bme280"].get("temperature_c", 0) or 0,
-                        data["bme280"].get("humidity_percent", 0) or 0,
+                        data["pressure"].get("depth_m", 0) or 0,
+                        data["soil"].get("surface", {}).get("moisture_percent", 0) or 0,
+                        data["soil"].get("deep", {}).get("moisture_percent", 0) or 0,
+                        data["rain"].get("rainfall_mm", 0) or 0,
                     )
 
                 time.sleep(settings.SENSOR_READ_INTERVAL_SEC)

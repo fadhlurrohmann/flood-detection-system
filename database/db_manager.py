@@ -40,21 +40,15 @@ class DBManager:
                 id                INTEGER PRIMARY KEY AUTOINCREMENT,
                 timestamp         TEXT    NOT NULL,
                 device_id         TEXT    NOT NULL,
-                mq2_voltage       REAL,
-                mq2_ppm           REAL,
-                mq135_voltage     REAL,
-                mq135_ppm         REAL,
-                temperature_c     REAL,
-                humidity_pct      REAL,
-                pressure_hpa      REAL,
+
                 soil_surface_pct  REAL,
                 soil_deep_pct     REAL,
-                wind_speed_ms     REAL,
                 water_current_ma  REAL,
                 water_depth_m     REAL,
                 water_fault_open  INTEGER,
-                battery_voltage   REAL,
-                battery_pct       REAL,
+                rainfall_mm       REAL,   -- accumulated rainfall since last reset/reading
+                rain_working_hrs  REAL,   -- sensor's cumulative operating time
+
                 full_payload      TEXT    -- JSON PERSIS yang dikirim ke API (untuk audit)
             )
         """)
@@ -81,50 +75,36 @@ class DBManager:
     def log_reading(self, data: dict, api_payload: dict) -> int:
         """
         Simpan satu siklus baca ke database SEBELUM dicoba dikirim ke API.
-        - data:        dict hasil EFWS._read_all() → {"mq2":{...}, "mq135":{...},
-                       "bme280":{...}, "soil":{"surface":{...},"deep":{...}},
-                       "wind":{...}, "pressure":{...}, "battery":{...}}
+        - data:        dict hasil EFWS._read_all() → {"soil":{"surface":{...},
+                       "deep":{...}}, "pressure":{...}}
         - api_payload: payload PERSIS yang akan dikirim ke API, disimpan utuh
                        di kolom full_payload untuk audit/pembanding dengan isi
                        antrian offline.
         Return: row id.
         """
-        mq2      = data.get("mq2", {})
-        mq135    = data.get("mq135", {})
-        bme      = data.get("bme280", {})
         soil     = data.get("soil", {})
-        wind     = data.get("wind", {})
         pressure = data.get("pressure", {})
-        battery  = data.get("battery", {})
+        rain = data.get("rain", {})
 
         cur = self.conn.cursor()
         cur.execute("""
             INSERT INTO sensor_readings (
                 timestamp, device_id,
-                mq2_voltage, mq2_ppm,
-                mq135_voltage, mq135_ppm,
-                temperature_c, humidity_pct, pressure_hpa,
                 soil_surface_pct, soil_deep_pct,
-                wind_speed_ms,
                 water_current_ma, water_depth_m, water_fault_open,
-                battery_voltage, battery_pct,
+                rainfall_mm, rain_working_hrs,
                 full_payload
             ) VALUES (
-                ?,?,  ?,?,  ?,?,  ?,?,?,  ?,?,  ?,  ?,?,?,  ?,?,  ?
+                ?,?,  ?,?,  ?,?,?,  ?,?,  ?
             )
         """, (
             datetime.now(timezone.utc).isoformat(),
             settings.DEVICE_ID,
-
-            mq2.get("voltage"), mq2.get("ppm"),
-            mq135.get("voltage"), mq135.get("ppm"),
-            bme.get("temperature_c"), bme.get("humidity_percent"), bme.get("pressure_hpa"),
             soil.get("surface", {}).get("moisture_percent"),
             soil.get("deep", {}).get("moisture_percent"),
-            wind.get("speed_ms"),
             pressure.get("current_ma"), pressure.get("depth_m"),
             int(bool(pressure.get("fault_open_loop", False))),
-            battery.get("voltage"), battery.get("percent"),
+            rain.get("rainfall_mm"), rain.get("working_time_hr"),
             json.dumps(api_payload, default=str),
         ))
         self.conn.commit()
@@ -176,10 +156,9 @@ class DBManager:
     def recent_readings(self, limit: int = 20) -> list:
         cur = self.conn.cursor()
         cur.execute("""
-            SELECT id, timestamp, mq2_ppm, mq135_ppm,
-                   temperature_c, humidity_pct,
-                   soil_surface_pct, soil_deep_pct, wind_speed_ms,
-                   water_depth_m, water_fault_open, battery_pct
+            SELECT id, timestamp,
+                   soil_surface_pct, soil_deep_pct,
+                   water_depth_m, water_fault_open
             FROM   sensor_readings
             ORDER  BY id DESC LIMIT ?
         """, (limit,))

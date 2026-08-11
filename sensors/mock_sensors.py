@@ -31,44 +31,6 @@ class _MockBase:
             return "critical"
 
 
-# ─── MQ-2 (smoke / LPG) ──────────────────────────────────────────
-class MockMQ2(_MockBase):
-    BASELINES = {"normal": 80, "warning": 450, "critical": 1200}
-
-    def read(self) -> dict:
-        sc  = self._scenario()
-        ppm = _jitter(self.BASELINES[sc], 0.08)
-        v   = round(0.4 + ppm / 1000 * 3.6, 3)   # voltase perkiraan
-        return {"voltage": v, "ppm": max(0.0, ppm), "_mock": True, "_scenario": sc}
-
-
-# ─── MQ-135 (air quality) ────────────────────────────────────────
-class MockMQ135(_MockBase):
-    BASELINES = {"normal": 120, "warning": 500, "critical": 1100}
-
-    def read(self) -> dict:
-        sc  = self._scenario()
-        ppm = _jitter(self.BASELINES[sc], 0.08)
-        v   = round(0.3 + ppm / 1000 * 3.3, 3)
-        return {"voltage": v, "ppm": max(0.0, ppm), "_mock": True, "_scenario": sc}
-
-
-# ─── BME280 (temp / humidity / pressure ambient) ─────────────────
-class MockBME280(_MockBase):
-    TEMP_BASE = {"normal": 30.0, "warning": 47.0, "critical": 62.0}
-    HUM_BASE  = {"normal": 65.0, "warning": 28.0, "critical": 12.0}
-
-    def read(self) -> dict:
-        sc = self._scenario()
-        phase = math.sin(time.time() / 30) * 2   # variasi sinusoidal kecil
-        return {
-            "temperature_c":    round(_jitter(self.TEMP_BASE[sc]) + phase, 2),
-            "humidity_percent": round(max(0, _jitter(self.HUM_BASE[sc]) - phase), 2),
-            "pressure_hpa":     round(_jitter(1013.0, 0.002), 2),
-            "_mock": True, "_scenario": sc,
-        }
-
-
 # ─── Submersible Pressure Sensor (water level, loop 4-20mA) ──────
 class MockPressureWater(_MockBase):
     MA_BASE = {"normal": 14.0, "warning": 7.0, "critical": 4.5}  # makin rendah = makin dangkal/kosong
@@ -101,17 +63,6 @@ class MockSoilMoisture(_MockBase):
             "surface": {"raw": int(900 - surface_pct / 100 * 520), "moisture_percent": round(surface_pct, 2), "_mock": True},
             "deep":    {"raw": int(900 - deep_pct    / 100 * 520), "moisture_percent": round(deep_pct,    2), "_mock": True},
         }
-
-
-# ─── Anemometer ──────────────────────────────────────────────────
-class MockAnemometer(_MockBase):
-    SPEED_BASE = {"normal": 2.5, "warning": 9.0, "critical": 17.0}
-
-    def read(self) -> dict:
-        sc    = self._scenario()
-        speed = max(0.0, _jitter(self.SPEED_BASE[sc], 0.12))
-        return {"speed_ms": round(speed, 2), "_mock": True, "_scenario": sc}
-
 
 # ─── Battery — Modul Sensor Tegangan DC 0-25V ────────────────────
 class MockBattery(_MockBase):

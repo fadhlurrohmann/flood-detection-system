@@ -1,6 +1,6 @@
 # Forest Fire Early Warning System (EFWS)
 
-IoT-based Forest Fire Early Warning System using Raspberry Pi 4.
+IoT-based Flood Early Warning System using Raspberry Pi 4.
 
 ## Features
 

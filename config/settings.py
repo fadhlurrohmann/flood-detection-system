@@ -56,9 +56,8 @@ def _bool(key: str, default: bool = True) -> bool:
 
 
 # ─── Device Identity ─────────────────────────────────────────────────────────
-DEVICE_ID    = _opt("EFWS_DEVICE_ID",    "DEV-JAM-TEST02")
+DEVICE_ID    = _opt("EFWS_DEVICE_ID",    "FLOOD-JAM-TEST02")
 DEVICE_TOKEN = _opt("EFWS_DEVICE_TOKEN", "test")
-
 DEVICE_LOCATION = {
     "lat": _float("EFWS_LAT", 0.0),
     "lon": _float("EFWS_LON", 0.0),
@@ -91,8 +90,6 @@ SPI_DEVICE       = _int("EFWS_SPI_DEVICE", 0)
 SPI_MAX_SPEED_HZ = _int("EFWS_SPI_SPEED", 1350000)
 MCP3008_VREF     = _float("EFWS_MCP3008_VREF", 3.3)
 
-ADC_CHANNEL_MQ2             = _int("EFWS_ADC_MQ2",          0)   # LLC HV-1
-ADC_CHANNEL_MQ135           = _int("EFWS_ADC_MQ135",         1)   # LLC HV-2
 ADC_CHANNEL_SOIL_SURFACE    = _int("EFWS_ADC_SOIL_SURFACE",  2)   # LLC HV-3 (probe 0-30cm)
 ADC_CHANNEL_SOIL_DEEP       = _int("EFWS_ADC_SOIL_DEEP",     3)   # LLC HV-4 (probe 30-60cm)
 ADC_CHANNEL_PRESSURE        = _int("EFWS_ADC_PRESSURE",      4)   # LLC HV-5 (pressure sensor via R_BURDEN)
@@ -120,68 +117,10 @@ PRESSURE_MAX_MA     = _float("EFWS_PRESSURE_MAX_MA",      20.0)
 PRESSURE_RANGE_M    = _float("EFWS_PRESSURE_RANGE_M",      3.0)  # rentang penuh sensor, sesuaikan datasheet
 PRESSURE_ADC_REF_VOLTAGE = _float("EFWS_PRESSURE_ADC_REF_VOLTAGE",3.3)
 
-# ─── smokeLevel: gabungan MQ-2 + MQ-135 → persentase 0-100% ────────────────
-# Formula: smokeLevel = (mq2_ppm/MQ2_CRIT * W_MQ2 + mq135_ppm/MQ135_CRIT * W_MQ135) * 100
-# Batas:   60-70% = WARNING, ≥70% = CRITICAL, 100% = kedua sensor di angka critical threshold
-SMOKE_MQ2_CRIT_PPM   = _float("EFWS_SMOKE_MQ2_CRIT",   1000.0)
-SMOKE_MQ135_CRIT_PPM = _float("EFWS_SMOKE_MQ135_CRIT", 1000.0)
-SMOKE_WEIGHT_MQ2     = _float("EFWS_SMOKE_W_MQ2",       0.55)
-SMOKE_WEIGHT_MQ135   = _float("EFWS_SMOKE_W_MQ135",     0.45)
-SMOKE_WARNING_PCT    = _float("EFWS_SMOKE_WARN",         60.0)
-SMOKE_CRITICAL_PCT   = _float("EFWS_SMOKE_CRIT",         70.0)
 
 GPIO_RELAY_SIREN  = _int("EFWS_GPIO_RELAY",  27)
 GPIO_STATUS_LED   = _int("EFWS_GPIO_LED",    23)
 
-# ─── Anemometer RS485 ────────────────────────────────────────────────────────
-
-ANEMOMETER_PORT = _opt(
-    "EFWS_ANEM_PORT",
-    "/dev/ttyUSB0"
-)
-
-ANEMOMETER_SLAVE_ID = _int(
-    "EFWS_ANEM_SLAVE",
-    2
-)
-
-ANEMOMETER_BAUDRATE = _int(
-    "EFWS_ANEM_BAUD",
-    9600
-)
-
-ANEMOMETER_BYTESIZE = _int(
-    "EFWS_ANEM_BYTESIZE",
-    8
-)
-
-ANEMOMETER_STOPBITS = _int(
-    "EFWS_ANEM_STOPBITS",
-    1
-)
-
-ANEMOMETER_TIMEOUT = _float(
-    "EFWS_ANEM_TIMEOUT",
-    1.0
-)
-
-ANEMOMETER_REGISTER = int(
-    _opt(
-        "EFWS_ANEM_REGISTER",
-        "0x0000"
-    ),
-    16
-)
-
-ANEMOMETER_DECIMALS = _int(
-    "EFWS_ANEM_DECIMALS",
-    1
-)
-
-ANEMOMETER_FUNCTION_CODE = _int(
-    "EFWS_ANEM_FUNCTION",
-    3
-)
 
 # ─── A7670E / SIM7670E 4G LTE Cat-1 ──────────────────────────────────────────────────────────
 A7670E_AT_PORT  = _opt("EFWS_SIM_PORT", "/dev/ttyUSB2")
