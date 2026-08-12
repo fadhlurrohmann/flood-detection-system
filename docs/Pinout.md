@@ -116,7 +116,7 @@ LLC:
 
 > Heater ~150mA — power langsung dari buck converter, jangan dari Pi GPIO 5V.
 
-### MQ-135 (Air Quality)
+### YF-S201 (Water flow sensor)
 | Pin sensor | Hubung ke |
 |-----------|-----------|
 | VCC | 5V (langsung dari sumber) |
