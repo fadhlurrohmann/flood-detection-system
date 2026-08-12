@@ -89,7 +89,7 @@ SPI_MAX_SPEED_HZ = _int("EFWS_SPI_SPEED", 1350000)
 MCP3008_VREF     = _float("EFWS_MCP3008_VREF", 3.3)
 
 ADC_CHANNEL_SOIL_SURFACE    = _int("EFWS_ADC_SOIL_SURFACE",  0)   # LLC HV-0 (probe 0-30cm)
-ADC_CHANNEL_SOIL_DEEP       = _int("EFWS_ADC_SOIL_DEEP",     1)   # LLC HV-1 (probe 30-60cm)
+ADC_CHANNEL_WATER_FLOW       = _int("EFWS_ADC_WATER_FLOW",     1)   # LLC HV-1 (probe 30-60cm)
 ADC_CHANNEL_PRESSURE        = _int("EFWS_ADC_PRESSURE",      2)   # LLC HV-2 (pressure sensor via R_BURDEN)
 ADC_CHANNEL_BATTERY         = _int("EFWS_ADC_BATTERY",       3)   # LLC HV-3 (voltage sensor module OUT)
 # CH4-CH7 tidak dikabel — spare fisik di MCP3008

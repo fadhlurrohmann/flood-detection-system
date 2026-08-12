@@ -85,7 +85,7 @@ lebih umum dijual dan menyisakan 2 channel untuk ekspansi).
 
 | LLC | Sisi HV (5V) ← dari sensor | Sisi LV (3.3V) → ke MCP3008 | Channel |
 |-----|---------------------------|------------------------------|---------|
-| HV-1 / LV-1 | MQ-2 **AOUT** | **CH0** | Smoke/gas analog |
+| HV-1 / LV-1 | YF-S201 **AOUT** | NONE | water flow digital |
 | HV-2 / LV-2 | MQ-135 **AOUT** | **CH1** | Air quality analog |
 | HV-3 / LV-3 | Soil Surface **AOUT** | **CH2** | Kelembaban 0-30cm |
 | HV-4 / LV-4 | Soil Deep **AOUT** | **CH3** | Kelembaban 30-60cm |
@@ -121,7 +121,7 @@ LLC:
 |-----------|-----------|
 | VCC | 5V (langsung dari sumber) |
 | GND | GND bersama |
-| AOUT | LLC **HV-2** → LV-2 → MCP3008 **CH1** |
+| AOUT | LLC **HV-1** → LV-1 → MCP3008 |
 
 ### Soil Moisture Probe — Surface (0-30cm)
 | Pin probe | Hubung ke |
