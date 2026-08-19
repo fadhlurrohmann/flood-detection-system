@@ -120,6 +120,10 @@ GPIO_RELAY_SIREN  = _int("EFWS_GPIO_RELAY",  27)
 GPIO_STATUS_LED   = _int("EFWS_GPIO_LED",    23)
 
 
+#-------- JSN-SR04T----------
+GPIO_JSN_TRIG = _int("EWF_JSN_TRIG", 22)
+GPIO_JSN_ECHO = _int("EWF_JSN_ECHO", 18)
+
 # ─── A7670E / SIM7670E 4G LTE Cat-1 ──────────────────────────────────────────────────────────
 A7670E_AT_PORT  = _opt("EFWS_SIM_PORT", "/dev/ttyUSB2")
 A7670E_BAUDRATE = _int("EFWS_A7670E_BAUD", 115200)
