@@ -11,7 +11,7 @@ def main():
 
     try:
         while True:
-            jarak_m = sensor.read()
+            jarak_m = sensor.read() 
             if jarak_m is None:
                 print("Tidak ada echo dari sensor; periksa wiring dan catu daya.")
                 continue

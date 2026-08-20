@@ -64,7 +64,7 @@ DEVICE_LOCATION = {
 }
 
 # ─── Mode operasi ────────────────────────────────────────────────────────────
-RUN_MODE = _opt("EFWS_RUN_MODE", "mock")
+RUN_MODE = _opt("EFWS_RUN_MODE", "hardware")
 
 # ─── I2C (BME280 — suhu/kelembaban/tekanan ambient, native I2C) ────────────
 I2C_BUS        = _int("EFWS_I2C_BUS", 1)
@@ -123,6 +123,9 @@ GPIO_STATUS_LED   = _int("EFWS_GPIO_LED",    23)
 #-------- JSN-SR04T----------
 GPIO_JSN_TRIG = _int("EWF_JSN_TRIG", 22)
 GPIO_JSN_ECHO = _int("EWF_JSN_ECHO", 18)
+
+#------- YF-S201-------------
+GPIO_YF = _int("EWF_GPIO_YF", 16)
 
 # ─── A7670E / SIM7670E 4G LTE Cat-1 ──────────────────────────────────────────────────────────
 A7670E_AT_PORT  = _opt("EFWS_SIM_PORT", "/dev/ttyUSB2")
