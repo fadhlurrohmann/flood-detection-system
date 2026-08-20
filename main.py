@@ -78,11 +78,13 @@ def _load_sensors_and_alarm():
         from sensors.rainfall    import RainfallSensor
         from sensors.null_sensor import NullSensor, NullAlarmController
         from alarm.siren         import AlarmController
+        from sensors.JSN_SR04T   import JSN_SR04T
 
         factories = {
             "pressure": PressureWaterSensor,
             "soil":     SoilMoistureSensor,
             "rain":     RainfallSensor,
+            "jarak":    JSN_SR04T,
         }
         sensors = {}
         for name, factory in factories.items():
@@ -284,6 +286,7 @@ class EFWS:
         soil     = data.get("soil", {})
         pressure = data.get("pressure", {})
         rain     = data.get("rain", {})
+        distance_m = data.get("jarak")
 
         timestamp = (
             datetime.now(ZoneInfo("Asia/Jakarta"))
@@ -298,6 +301,7 @@ class EFWS:
                 {
                     "timestamp": timestamp,
                     "waterLevel": pressure.get("depth_m"),
+                    "distanceM": distance_m,
                     "soilMoisture": {
                         "surface": soil.get("surface", {}).get("moisture_percent"),
                         "deep":    soil.get("deep", {}).get("moisture_percent"),
@@ -460,6 +464,10 @@ class EFWS:
         finally:
             self._stop_flag.set()
             self.alarm.silence()
+            for sensor in self.sensors.values():
+                close = getattr(sensor, "close", None)
+                if close is not None:
+                    close()
             self.api.close()
             if self.sim:
                 self.sim.close()
