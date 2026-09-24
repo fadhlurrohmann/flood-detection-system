@@ -23,49 +23,48 @@
 └──────────────┘         └─────────────┬──────────────┘            │ (satu saja) │
                                         │                          └─────────────┘
                           ┌─────────────┴──────────────┐
-                          │ 1) Simpan ke SQLite DULU    │
-                          │ 2) Evaluasi lokal (siren)   │
-                          │ 3) Coba kirim ke REST API   │
-                          │ 4) Gagal → antrian offline  │
+                          │ 1) Save to SQLite FIRST     │
+                          │ 2) Evaluate locally (siren) │
+                          │ 3) Try sending to REST API  │
+                          │ 4) Failure → offline queue  │
                           └─────────────┬──────────────┘
                                         ▼
                     EWS_API_URL/sensors/telemetry (backend)
-                    ── backend yang menyimpan alarm level &
-                       evaluasi threshold "resmi"
+                    ── backend stores the alarm level and
+                       the "official" threshold evaluation
 ```
 
-## Alur data (penting)
+## Data flow (important)
 
-1. **Baca** semua sensor tiap `EF\WS_READ_INTERVAL` detik.
-2. **Simpan ke SQLite dulu** (`sensor_readings`, sumber kebenaran lokal) —
-   data tidak pernah hilang meski sinyal/koneksi sedang mati.
-3. **Evaluasi lokal** terhadap `config/thresholds.json` — HANYA dipakai
-   untuk menyalakan sirine secara real-time di lapangan. Hasil evaluasi ini
-   **tidak** disimpan ke database maupun dikirim ke API — alarm level &
-   threshold "resmi" adalah tanggung jawab backend, bukan device.
-4. **Coba kirim** payload ke `EFWS_API_URL/sensors/telemetry`. Kalau
-   berhasil, selesai. Kalau gagal (sinyal mati), payload otomatis masuk
-   antrian offline (`api_queue`) — payload disimpan APA ADANYA, tidak
-   berubah sedikit pun.
-5. Selama offline, publisher **tidak** spam retry — hanya cek sinyal ulang
-   tiap `EFWS_CONNECTIVITY_CHECK_SEC` (default 120s / 2 menit). Begitu
-   online lagi, seluruh antrian di-flush otomatis secara FIFO.
+1. **Read** all sensors every `EFWS_READ_INTERVAL` seconds.
+2. **Save to SQLite first** (`sensor_readings`, the local source of truth) —
+   data is never lost even when the signal or connection is down.
+3. **Evaluate locally** against `config/thresholds.json` — this is used ONLY
+   to activate the field siren in real time. The result is **not** stored in
+   the database or sent to the API; the backend owns the official alarm level
+   and threshold evaluation.
+4. **Try to send** the payload to `EFWS_API_URL/sensors/telemetry`. If it
+   succeeds, the cycle is complete. If it fails, the payload automatically
+   enters the offline queue (`api_queue`) unchanged.
+5. While offline, the publisher **does not** spam retries. It checks
+   connectivity every `EFWS_CONNECTIVITY_CHECK_SEC` (default 120 seconds),
+   then flushes the entire queue in FIFO order when back online.
 
 ## Module responsibilities
 
-- **sensors/**: satu driver class per sensor fisik, masing-masing punya `.read()`
-  yang mengembalikan dict. `mock_sensors.py` menyediakan versi simulasi untuk
-  testing tanpa hardware (`EFWS_RUN_MODE=mock`).
+- **sensors/**: one driver class per physical sensor; each exposes `.read()`
+  and returns a dict. `mock_sensors.py` provides a simulated version for
+  testing without hardware (`EFWS_RUN_MODE=mock`).
 - **alarm/**: `relay.py` adalah driver GPIO low-level; `siren.py`
-  (`AlarmController`) mengubahnya jadi 2 tingkat eskalasi (WARNING = berdenyut
-  pelan, CRITICAL = nyala terus) lewat SATU relay yang sama — tidak ada buzzer
-  terpisah di hardware ini.
-- **communication/**: `sim_detector.py` auto-detect modul 4G yang terpasang
-  (A7670E atau SIM7600), `api_publisher.py` adalah satu-satunya jalur keluar
-  data (REST API + offline queue). Tidak ada MQTT atau Telegram di project ini.
+  (`AlarmController`) turns it into two escalation levels (WARNING = slow pulse,
+  CRITICAL = continuously on) through the same relay. This hardware has no
+  separate buzzer.
+- **communication/**: `sim_detector.py` auto-detect modul 4G that installed
+  (A7670E or SIM7600), and `api_publisher.py` is the only outbound data path
+  (REST API + offline queue). This project does not use MQTT or Telegram.
 - **database/**: `db_manager.py` menyimpan setiap pembacaan sensor mentah +
-  payload API persis, dan mengelola antrian offline. Tidak menyimpan alarm
-  level maupun threshold — itu tanggung jawab backend.
+  the exact API payload, and manages the offline queue. It does not store the
+  alarm level or thresholds; that is the backend's responsibility.
 - **config/**: `settings.py` memusatkan semua pin/channel/kredensial;
-  `thresholds.json` memusatkan batas warning/critical untuk sirine LOKAL saja.
-- **main.py**: baca → simpan DB → evaluasi lokal (siren) → kirim/antri → ulangi.
+  `thresholds.json` centralizes warning/critical limits for the LOCAL siren only.
+- **main.py**: read → save to DB → evaluate locally (siren) → send/queue → repeat.
