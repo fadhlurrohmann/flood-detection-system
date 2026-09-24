@@ -1,4 +1,4 @@
-# EFWS — Panduan Lengkap: Wiring → Testing → Prototyping API → Jalan di Background
+# EFWS — Complete Guide: Wiring → Testing → API Prototyping → Background Operation
 
 This guide from NOL sampai EFWS jalan stabil di background, memakai
 hardware aktual: Raspberry Pi 4, MCP3008 (ADC SPI), Logic Level Converter,
