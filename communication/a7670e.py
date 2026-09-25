@@ -2,25 +2,25 @@
 SIMCom A7670E / SIM7670E (LTE Cat-1 4G) controller via AT command - GPS/GNSS.
 
 CATATAN PENTING soal kompatibilitas AT command:
-  Modul A7670E/SIM7670E SECARA UMUM kompatibel dengan AT command set
-  A7670E kompatibel dengan AT command SIM7600 untuk fungsi modem dasar (AT, AT+CSQ, AT+CREG?, AT+CGDCONT,
-  AT+CGPADDR), TAPI untuk GNSS/GPS perintahnya BERBEDA:
+  Module A7670E/SIM7670E SECARA UMUM kompatibel with AT command set
+  A7670E kompatibel with AT command SIM7600 for fungsi modem dasar (AT, AT+CSQ, AT+CREG?, AT+CGDCONT,
+  AT+CGPADDR), TAPI for GNSS/GPS perintahnya BERBEDA:
 
-    SIM7600 lama : AT+CGPS=1 / AT+CGPS=0   (nyalakan/matikan GPS engine)
-    A7670E/SIM7670E : AT+CGNSSPWR=1 / AT+CGNSSPWR=0  (nyalakan/matikan GNSS)
+    SIM7600 old : AT+CGPS=1 / AT+CGPS=0   (turn on/turn off GPS engine)
+    A7670E/SIM7670E : AT+CGNSSPWR=1 / AT+CGNSSPWR=0  (turn on/turn off GNSS)
 
-  Sedangkan AT+CGPSINFO untuk membaca hasil fix formatnya SAMA di kedua
-  keluarga modul ini, jadi parser NMEA di bawah tetap dipakai apa adanya.
+  Sedangkan AT+CGPSINFO for reading result fix formatnya SAMA di kedua
+  keluarga module ini, jadi parser NMEA di bawah tetap used apa adanya.
   (Referensi: SIMCom A76XX Series AT Command Manual & GNSS Application Note)
 
 Fitur:
   - Diagnostik modem (signal, registrasi jaringan, IP)
-  - GPS: ambil koordinat lat/lon real dari antena GNSS modul
+  - GPS: get koordinat lat/lon real from antenna GNSS module
 
 Alur AT command GNSS:
-  AT+CGNSSPWR=1   -> nyalakan GNSS engine (tunggu "+CGNSSPWR: READY!")
-  AT+CGPSINFO     -> baca NMEA fix (lat, lon, alt, kecepatan, arah, waktu)
-  AT+CGNSSPWR=0   -> matikan GNSS (opsional, hemat daya)
+  AT+CGNSSPWR=1   -> turn on GNSS engine (tunggu "+CGNSSPWR: READY!")
+  AT+CGPSINFO     -> read NMEA fix (lat, lon, alt, kecepatan, arah, waktu)
+  AT+CGNSSPWR=0   -> turn off GNSS (opsional, hemat daya)
 
 Requires: pip install pyserial
 """
@@ -38,13 +38,13 @@ logger = logging.getLogger("efws.a7670e")
 
 class A7670E:
     """
-    Module A7670E/SIM7670E - class utama untuk akses AT command dan GNSS.
+    Module A7670E/SIM7670E - class main for akses AT command dan GNSS.
     
     """
 
     def __init__(self, port=None, baudrate=None):
         if serial is None:
-            raise RuntimeError("pyserial tidak terinstall - pip install pyserial")
+            raise RuntimeError("pyserial is not installed - pip install pyserial")
         self.ser = serial.Serial(
             port or settings.A7670E_AT_PORT,
             baudrate or settings.A7670E_BAUDRATE,
@@ -54,7 +54,7 @@ class A7670E:
 
     # ─── AT command primitif ─────────────────────────────────────
     def send_at(self, command: str, wait: float = 1.0) -> str:
-        """Kirim AT command, return response string."""
+        """Send AT command, return response string."""
         self.ser.reset_input_buffer()
         self.ser.write((command + "\r\n").encode())
         time.sleep(wait)
@@ -66,7 +66,7 @@ class A7670E:
         return "OK" in self.send_at("AT")
 
     def signal_quality(self) -> str:
-        """AT+CSQ -> +CSQ: <rssi>,<ber>. rssi 0-31 (makin tinggi makin kuat), 99=tidak diketahui."""
+        """AT+CSQ -> +CSQ: <rssi>,<ber>. rssi 0-31 (makin high makin kuat), 99=not diketahui."""
         return self.send_at("AT+CSQ")
 
     def network_registration(self) -> str:
@@ -83,26 +83,26 @@ class A7670E:
     # ─── GNSS / GPS (A7670E/SIM7670E command set) ─────────────────
     def gps_power_on(self) -> bool:
         """
-        Nyalakan GNSS engine A7670E/SIM7670E. Perlu 15-60 detik untuk fix
-        pertama (cold start) di luar ruangan dengan antena GNSS terpasang.
+        Turn on GNSS engine A7670E/SIM7670E. Perlu 15-60 seconds for fix
+        pertama (cold start) di luar room with antenna GNSS installed.
         """
         resp = self.send_at("AT+CGNSSPWR=1", wait=2.0)
         if "OK" in resp or "READY" in resp:
             self._gnss_on = True
-            logger.info("GNSS engine ON. Tunggu fix (cold: ~15-60 detik).")
+            logger.info("GNSS engine ON. Tunggu fix (cold: ~15-60 seconds).")
             return True
-        logger.warning("GNSS power ON gagal: %s", resp.strip())
+        logger.warning("GNSS power ON failed: %s", resp.strip())
         return False
 
     def gps_power_off(self) -> bool:
-        """Matikan GNSS engine (hemat daya jika tidak dibutuhkan terus-menerus)."""
+        """Turn off GNSS engine (hemat daya if not dibutuhkan terus-menerus)."""
         resp = self.send_at("AT+CGNSSPWR=0", wait=1.0)
         self._gnss_on = False
         return "OK" in resp
 
     def _parse_cgpsinfo(self, raw: str) -> dict | None:
         """
-        Parse respons AT+CGPSINFO (format sama untuk semua modul SIMCom A76XX/ SIM76XX series).
+        Parse respons AT+CGPSINFO (format sama for all module SIMCom A76XX/ SIM76XX series).
 
         Format NMEA:
           +CGPSINFO: <lat>,<N/S>,<lon>,<E/W>,<date>,<utc_time>,<alt>,<speed>,<course>
@@ -160,9 +160,9 @@ class A7670E:
 
     def get_gps(self, timeout: int = 90, interval: float = 3.0) -> dict:
         """
-        Ambil koordinat GPS dari A7670E/SIM7670E.
-        Jika GNSS engine belum ON, akan dinyalakan otomatis.
-        Polling AT+CGPSINFO sampai ada fix atau timeout.
+        Get koordinat GPS from A7670E/SIM7670E.
+        If GNSS engine belum ON, akan dinyalakan otomatis.
+        Polling AT+CGPSINFO sampai ada fix or timeout.
 
         Return dict:
           fix=True  -> {"fix": True, "lat": float, "lon": float, ...}
@@ -170,7 +170,7 @@ class A7670E:
         """
         if not self._gnss_on:
             if not self.gps_power_on():
-                return {"fix": False, "reason": "GNSS engine gagal dinyalakan"}
+                return {"fix": False, "reason": "GNSS engine failed dinyalakan"}
 
         logger.info("Menunggu GNSS fix (timeout %ds)...", timeout)
         elapsed = 0.0
@@ -198,7 +198,7 @@ class A7670E:
         }
 
     def get_gps_location(self) -> "tuple[float, float] | None":
-        """Shortcut: return (lat, lon) atau None jika tidak ada fix."""
+        """Shortcut: return (lat, lon) or None if none fix."""
         result = self.get_gps()
         if result.get("fix"):
             return result["lat"], result["lon"]
@@ -210,9 +210,9 @@ class A7670E:
         self.ser.close()
 
 
-# ─── Mock GPS untuk mode testing ─────────────────────────────────
+# ─── Mock GPS for mode testing ─────────────────────────────────
 class MockA7670E:
-    """Dipakai saat RUN_MODE=mock - tidak butuh hardware A7670E/SIM7670E."""
+    """Used when RUN_MODE=mock - not needs hardware A7670E/SIM7670E."""
     _gnss_on = False
 
     def gps_power_on(self) -> bool:
@@ -247,7 +247,7 @@ class MockA7670E:
 
 
 if __name__ == "__main__":
-    # Test langsung: python communication/a7670e.py
+    # Test directly: python communication/a7670e.py
     import json
     modem = A7670E()
     print("Module:", modem.check_module())

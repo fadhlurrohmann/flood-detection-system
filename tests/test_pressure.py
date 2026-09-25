@@ -1,16 +1,16 @@
 """
-TEST — Submersible Pressure Sensor (ketinggian air, loop 4-20mA via burden resistor)
+TEST — Submersible Pressure Sensor (water level, loop 4-20mA via burden resistor)
 
-Cek dulu sebelum run:
+Check dulu before run:
   ls /dev/spidev*  → harus ada /dev/spidev0.0
-  R_BURDEN 250Ω terpasang di loop, tap-nya ke LLC HV-5 → LV-5 → MCP3008 CH4
-  PSU loop 12-24V sudah menyala (sensor ini loop-powered, BUKAN dari Pi/buck 5V)
+  R_BURDEN 250Ω installed di loop, tap-nya ke LLC HV-5 → LV-5 → MCP3008 CH4
+  PSU loop 12-24V sudah active (sensor ini loop-powered, NOT from Pi/buck 5V)
 
-Yang dicek:
-  1. Sensor bisa dibaca tanpa exception.
-  2. current_ma ada di rentang wajar 4-20mA (di luar itu = sinyal aneh/loop bermasalah).
-  3. fault_open_loop tidak menyala terus-menerus (kalau iya → loop kemungkinan putus).
-  4. depth_m masuk akal (0 sampai PRESSURE_RANGE_M).
+That dicek:
+  1. Sensor bisa dibaca without exception.
+  2. current_ma ada di rentang wajar 4-20mA (di luar itu = signal aneh/loop bermasalah).
+  3. fault_open_loop not active terus-menerus (if iya → loop possibly putus).
+  4. depth_m enter akal (0 sampai PRESSURE_RANGE_M).
 
 Usage: python3 tests/test_pressure.py
 """
@@ -31,7 +31,7 @@ try:
     sensor = PressureWaterSensor()
 except Exception as e:
     print(f"❌ Gagal inisialisasi: {e}")
-    print("Cek: ls /dev/spidev* harus menunjukkan /dev/spidev0.0")
+    print("Check: ls /dev/spidev* harus menunjukkan /dev/spidev0.0")
     sys.exit(1)
 
 N = 5
@@ -67,11 +67,11 @@ else:
     print(f"  ✅ current_ma semua di rentang wajar ({min(ma_values)}-{max(ma_values)}mA)")
 
 if fault_count == N:
-    problems.append("fault_open_loop menyala di SEMUA pembacaan — loop kemungkinan putus/belum tersambung")
+    problems.append("fault_open_loop active di ALL pembacaan — loop possibly putus/belum connected")
 elif fault_count > 0:
     print(f"  ⚠️  fault_open_loop menyala {fault_count}/{N}x — cek sambungan loop kalau ini tidak diharapkan")
 else:
-    print("  ✅ Tidak ada fault_open_loop selama test")
+    print("  ✅ None fault_open_loop selama test")
 
 depth_values = [r["depth_m"] for r in readings]
 if any(d < 0 or d > settings.PRESSURE_RANGE_M for d in depth_values):
@@ -81,10 +81,10 @@ else:
 
 print()
 if problems:
-    print("❌ Ada yang perlu dicek:")
+    print("❌ Ada that perlu dicek:")
     for p in problems:
         print(f"   - {p}")
-    print("\nLihat docs/Pinout.md bagian 'Submersible Pressure Sensor' untuk detail wiring.")
+    print("\nLihat docs/Pinout.md section 'Submersible Pressure Sensor' for detail wiring.")
     sys.exit(1)
 else:
-    print("✅ Submersible pressure sensor terbaca dengan baik.")
+    print("✅ Submersible pressure sensor read successfully.")

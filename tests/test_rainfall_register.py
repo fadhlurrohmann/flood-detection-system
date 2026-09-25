@@ -3,10 +3,10 @@
 """
 Dump seluruh register penting Rainfall Sensor.
 
-Tidak menggunakan driver.
-Langsung membaca register I2C.
+Not menggunakan driver.
+Directly reading register I2C.
 
-CTRL+C untuk berhenti.
+CTRL+C for berhenti.
 """
 
 import time

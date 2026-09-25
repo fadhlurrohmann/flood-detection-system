@@ -1,17 +1,17 @@
 """
-AlarmController - mengendalikan relay yang men-switch sirine 12V/24V/220V
-120dB dengan LED flasher bawaan.
+AlarmController - mengendalikan relay that men-switch sirine 12V/24V/220V
+120dB with LED flasher bawaan.
 
-Tidak ada buzzer terpisah di hardware (sesuai daftar komponen) - jadi
-2 tingkat eskalasi dibuat HANYA dari satu relay yang sama:
+None buzzer separate di hardware (sesuai daftar komponen) - jadi
+2 tingkat eskalasi dibuat ONLY from satu relay that sama:
 
   WARNING  -> sirine berdenyut pelan (nyala 0.4s / mati 1.6s) sebagai
-              pre-alarm yang masih bisa "diabaikan" sebentar
-  CRITICAL -> sirine menyala TERUS-MENERUS (siaga penuh)
+              pre-alarm that masih bisa "diabaikan" sebentar
+  CRITICAL -> sirine active TERUS-MENERUS (siaga full)
 
-Pulsing untuk level WARNING dijalankan di background thread supaya tidak
-memblokir loop utama main.py (yang tetap perlu lanjut baca sensor & kirim
-data tiap beberapa detik sementara alarm WARNING aktif).
+Pulsing for level WARNING run di background thread so that not
+memblokir loop main main.py (that tetap perlu lanjut read sensors & send
+data every beberapa seconds sementara alarm WARNING aktif).
 """
 import threading
 import time
@@ -56,7 +56,7 @@ class AlarmController:
             return
         self.current_level = level
 
-        # Selalu hentikan dulu pola pulsing lama sebelum set state baru
+        # Selalu hentikan dulu pola pulsing old before set state new
         self._stop_pulse()
 
         if level == self.LEVEL_NONE:
@@ -74,11 +74,11 @@ if __name__ == "__main__":
     # Test cepat manual: python alarm/siren.py
     ctrl = AlarmController()
     try:
-        print("WARNING selama 5 detik (denyut pelan)...")
+        print("WARNING selama 5 seconds (denyut pelan)...")
         ctrl.set_level(AlarmController.LEVEL_WARNING)
         time.sleep(5)
 
-        print("CRITICAL selama 5 detik (nyala terus)...")
+        print("CRITICAL selama 5 seconds (nyala terus)...")
         ctrl.set_level(AlarmController.LEVEL_CRITICAL)
         time.sleep(5)
     finally:

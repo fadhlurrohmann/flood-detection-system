@@ -1,18 +1,15 @@
 {
-  "_doc": "Hardcoded FALLBACK thresholds — dipakai HANYA kalau backend belum pernah mengirim 'config' di response /sensors/telemetry, atau field tertentu di 'config' bernilai null. Begitu backend pernah mengirim config yang valid untuk sebuah field, nilai remote itu yang dipakai (lihat config/threshold_resolver.py). Bentuk JSON ini SENGAJA dibuat identik dengan bentuk 'config' dari API supaya fallback-nya per-field, bukan all-or-nothing.",
-
+  "_doc": "Hardcoded FALLBACK thresholds. These are used only when the backend has never sent 'config' in the /sensors/telemetry response, or when a specific field in 'config' is null. Once the backend sends a valid config value for a field, that remote value is used. See config/threshold_resolver.py. This JSON shape is intentionally identical to the API 'config' shape so fallback works per field, not all-or-nothing.",
   "soilMoistureDangerThreshold": {
     "surface": 10,
     "deep": 10
   },
-  "_soilMoistureDangerThreshold_note": "Persen kelembaban tanah. Nilai DI BAWAH ini = kering/berbahaya (evaluasi lower_is_worse).",
-
+  "_soilMoistureDangerThreshold_note": "Soil moisture percentage. Values below this threshold mean dry/dangerous conditions using lower_is_worse evaluation.",
   "waterDangerThreshold": 0.5,
-  "_waterDangerThreshold_note": "Ketinggian air (m) di tandon/reservoir. Nilai DI BAWAH ini = air menipis (evaluasi lower_is_worse). API contoh mengirim null untuk field ini di sejumlah device -- kalau null, angka lokal ini yang dipakai.",
-
+  "_waterDangerThreshold_note": "Water level in meters in the tank/reservoir. Values below this threshold mean the water level is low using lower_is_worse evaluation. Some API responses send null for this field; when that happens, this local value is used.",
   "alarm": {
     "consecutive_readings_required": 3,
     "cooldown_seconds": 300,
-    "_note": "Sirine lokal (relay) baru menyala setelah N pembacaan CONSECUTIVE melewati danger threshold berturut-turut. Ini independen dari pengiriman emergency upload ke backend."
+    "_note": "The local siren relay turns on only after N consecutive readings cross a danger threshold. This is independent from emergency uploads to the backend."
   }
 }

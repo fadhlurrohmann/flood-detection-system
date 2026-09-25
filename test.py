@@ -30,7 +30,7 @@ def main():
         print(gps)
 
         if "," in gps and "+CGNSSINFO:" in gps:
-            print("GPS terbaca.")
+            print("GPS readable.")
             break
 
         time.sleep(5)
@@ -76,7 +76,7 @@ if __name__ == "__main__":
 # try:
 #     while True:
 #         if sensor.value == 0:
-#             print("⚠️ Gas/asap terdeteksi!")
+#             print("⚠️ Gas/asap detected!")
 #         else:
 #             print("Udara normal")
 
@@ -89,14 +89,14 @@ if __name__ == "__main__":
 # """
 # SIM7600E-H Diagnostic Test Script
 # ===================================
-# Jalankan langsung di Raspberry Pi untuk cek semua fungsi modul:
-#   1. Koneksi serial & AT command dasar
+# Run directly di Raspberry Pi for check all fungsi module:
+#   1. Connection serial & AT command dasar
 #   2. SIM card & registrasi jaringan
-#   3. Kualitas sinyal
+#   3. Kualitas signal
 #   4. GPS fix (koordinat real)
-#   5. Koneksi data (ping ke internet)
+#   5. Connection data (ping ke internet)
 
-# Cara pakai:
+# Cara use:
 #   python test_sim7600.py
 #   python test_sim7600.py --port /dev/ttyUSB2
 #   python test_sim7600.py --port /dev/ttyUSB2 --gps-timeout 120
@@ -142,16 +142,16 @@ if __name__ == "__main__":
 
 #     ports = list(serial.tools.list_ports.comports())
 #     if not ports:
-#         result(FAIL, "Tidak ada port serial terdeteksi.")
-#         print("\n  Pastikan SIM7600E HAT terpasang dan driver terinstall.")
+#         result(FAIL, "None port serial detected.")
+#         print("\n  Make sure SIM7600E HAT installed dan driver terinstall.")
 #         print("  Coba: ls /dev/ttyUSB*")
 #         return None
 
-#     print(f"  Port yang terdeteksi ({len(ports)}):")
+#     print(f"  Port that detected ({len(ports)}):")
 #     for p in ports:
 #         print(f"    {p.device:20s} | {p.description}")
 
-#     # Prioritas port yang dipakai SIM7600E
+#     # Prioritas port that used SIM7600E
 #     candidates = [p.device for p in ports if "USB" in p.device]
 #     sim_candidates = ["/dev/ttyUSB2", "/dev/ttyUSB1", "/dev/ttyUSB0"]
 
@@ -167,31 +167,31 @@ if __name__ == "__main__":
 #             chosen = candidates[0]
 
 #     if chosen:
-#         result(OK, f"Akan gunakan port: {chosen}")
+#         result(OK, f"Akan use port: {chosen}")
 #     else:
-#         result(FAIL, "Tidak ada port /dev/ttyUSB* ditemukan.")
+#         result(FAIL, "None port /dev/ttyUSB* ditemukan.")
 #     return chosen
 
 
-# # ─── Test 2: Koneksi serial & AT dasar ───────────────────────────
+# # ─── Test 2: Connection serial & AT dasar ───────────────────────────
 # def test_basic_at(ser: serial.Serial) -> bool:
-#     header("TEST 2: Koneksi Serial & AT Command Dasar")
+#     header("TEST 2: Connection Serial & AT Command Dasar")
 
-#     # AT - ping modul
+#     # AT - ping module
 #     resp = send_at(ser, "AT")
 #     if "OK" in resp:
-#         result(OK, "AT command", "modul merespons")
+#         result(OK, "AT command", "module merespons")
 #     else:
-#         result(FAIL, "AT command tidak merespons.", f"raw: {repr(resp)}")
-#         print("\n  Kemungkinan penyebab:")
-#         print("  - Port salah (coba --port /dev/ttyUSB1 atau ttyUSB2)")
-#         print("  - Baudrate salah (default 115200)")
-#         print("  - Modul belum dinyalakan / power issue")
+#         result(FAIL, "AT command does not respond.", f"raw: {repr(resp)}")
+#         print("\n  Possibly penyebab:")
+#         print("  - Port wrong (coba --port /dev/ttyUSB1 or ttyUSB2)")
+#         print("  - Baudrate wrong (default 115200)")
+#         print("  - Module belum dinyalakan / power issue")
 #         return False
 
-#     # ATI - info modul
+#     # ATI - info module
 #     resp = send_at(ser, "ATI")
-#     result(INFO, "Info modul:", resp.replace("\r\n", " | "))
+#     result(INFO, "Info module:", resp.replace("\r\n", " | "))
 
 #     # AT+CGSN - IMEI
 #     resp = send_at(ser, "AT+CGSN")
@@ -199,7 +199,7 @@ if __name__ == "__main__":
 #     if imei:
 #         result(OK, "IMEI:", imei.group())
 #     else:
-#         result(WARN, "IMEI tidak terbaca", f"raw: {repr(resp)}")
+#         result(WARN, "IMEI not readable", f"raw: {repr(resp)}")
 
 #     # AT+CGMR - versi firmware
 #     resp = send_at(ser, "AT+CGMR")
@@ -212,20 +212,20 @@ if __name__ == "__main__":
 # def test_sim_card(ser: serial.Serial) -> bool:
 #     header("TEST 3: SIM Card")
 
-#     # Cek SIM terpasang
+#     # Check SIM installed
 #     resp = send_at(ser, "AT+CIMI")
 #     imsi = re.search(r"\d{10,15}", resp)
 #     if imsi:
-#         result(OK, "SIM terpasang. IMSI:", imsi.group())
+#         result(OK, "SIM installed. IMSI:", imsi.group())
 #     else:
-#         result(FAIL, "SIM tidak terdeteksi atau belum unlock.")
-#         print("  Pastikan SIM card terpasang dengan benar.")
+#         result(FAIL, "SIM not detected or belum unlock.")
+#         print("  Make sure SIM card installed with correct.")
 #         return False
 
-#     # Cek PIN
+#     # Check PIN
 #     resp = send_at(ser, "AT+CPIN?")
 #     if "READY" in resp:
-#         result(OK, "SIM PIN status: READY (tidak butuh PIN)")
+#         result(OK, "SIM PIN status: READY (not needs PIN)")
 #     elif "SIM PIN" in resp:
 #         result(FAIL, "SIM masih terkunci PIN! Masukkan PIN dulu.")
 #         return False
@@ -238,23 +238,23 @@ if __name__ == "__main__":
 #     if op:
 #         result(OK, "Operator:", op.group(1))
 #     else:
-#         result(WARN, "Operator belum terbaca (mungkin masih registrasi)", f"raw: {resp}")
+#         result(WARN, "Operator belum readable (mungkin masih registrasi)", f"raw: {resp}")
 
 #     return True
 
 
-# # ─── Test 4: Kualitas sinyal ─────────────────────────────────────
+# # ─── Test 4: Kualitas signal ─────────────────────────────────────
 # def test_signal(ser: serial.Serial) -> bool:
-#     header("TEST 4: Kualitas Sinyal")
+#     header("TEST 4: Kualitas Signal")
 
 #     # Registrasi jaringan
 #     resp = send_at(ser, "AT+CREG?")
 #     creg = re.search(r"\+CREG: \d+,(\d+)", resp)
 #     reg_status = {
-#         "0": "Tidak terdaftar, tidak mencari",
+#         "0": "Not terdaftar, not mencari",
 #         "1": "Terdaftar (home network)",
 #         "2": "Mencari jaringan...",
-#         "3": "Registrasi ditolak",
+#         "3": "Registrasi rejected",
 #         "5": "Terdaftar (roaming)",
 #     }
 #     if creg:
@@ -263,9 +263,9 @@ if __name__ == "__main__":
 #         icon = OK if stat in ("1", "5") else WARN if stat == "2" else FAIL
 #         result(icon, "Registrasi jaringan:", desc)
 #         if stat not in ("1", "5"):
-#             print("  Tunggu beberapa detik dan coba lagi.")
+#             print("  Tunggu beberapa seconds dan coba lagi.")
 #     else:
-#         result(WARN, "Tidak bisa baca status registrasi")
+#         result(WARN, "Cannot read status registrasi")
 
 #     # CSQ - signal strength
 #     resp = send_at(ser, "AT+CSQ")
@@ -273,14 +273,14 @@ if __name__ == "__main__":
 #     if csq:
 #         rssi = int(csq.group(1))
 #         if rssi == 99:
-#             result(WARN, "Sinyal: tidak diketahui (99) -- pastikan antena terpasang")
+#             result(WARN, "Signal: not diketahui (99) -- make sure antenna installed")
 #         else:
 #             dbm   = -113 + (rssi * 2)
 #             level = "Lemah" if rssi < 10 else "Sedang" if rssi < 20 else "Kuat"
 #             result(OK if rssi >= 10 else WARN,
-#                    f"Sinyal: RSSI={rssi}/31, ~{dbm}dBm", level)
+#                    f"Signal: RSSI={rssi}/31, ~{dbm}dBm", level)
 #     else:
-#         result(FAIL, "Tidak bisa baca kualitas sinyal")
+#         result(FAIL, "Cannot read kualitas signal")
 #         return False
 
 #     # Tipe jaringan (4G/3G/2G)
@@ -295,24 +295,24 @@ if __name__ == "__main__":
 
 # # ─── Test 5: GPS ─────────────────────────────────────────────────
 # def test_gps(ser: serial.Serial, timeout: int = 90) -> bool:
-#     header(f"TEST 5: GPS (timeout {timeout} detik)")
-#     print("  Pastikan antena GPS terpasang dan ada langit terbuka.")
-#     print("  Cold start bisa butuh 30-90 detik.\n")
+#     header(f"TEST 5: GPS (timeout {timeout} seconds)")
+#     print("  Make sure antenna GPS installed dan ada sky open.")
+#     print("  Cold start bisa needs 30-90 seconds.\n")
 
-#     # Nyalakan GPS engine
+#     # Turn on GPS engine
 #     resp = send_at(ser, "AT+CGPS=1", wait=2)
 #     if "OK" in resp or "already" in resp.lower():
 #         result(OK, "GPS engine ON")
 #     else:
-#         result(FAIL, "GPS engine gagal dinyalakan:", repr(resp))
+#         result(FAIL, "GPS engine failed dinyalakan:", repr(resp))
 #         return False
 
-#     # Polling AT+CGPSINFO sampai fix atau timeout
+#     # Polling AT+CGPSINFO sampai fix or timeout
 #     elapsed = 0
 #     interval = 3
 #     last_raw = ""
 
-#     print(f"  Polling setiap {interval}s...")
+#     print(f"  Polling each {interval}s...")
 #     while elapsed < timeout:
 #         resp = send_at(ser, "AT+CGPSINFO", wait=1)
 #         last_raw = resp
@@ -344,7 +344,7 @@ if __name__ == "__main__":
 #                     utc_fmt  = f"{utc[:2]}:{utc[2:4]}:{utc[4:]}" if len(utc) >= 6 else utc
 
 #                     print()
-#                     result(OK, "GPS FIX BERHASIL!")
+#                     result(OK, "GPS FIX SUCCESSFUL!")
 #                     print(f"\n  {'Latitude':<20}: {lat}")
 #                     print(f"  {'Longitude':<20}: {lon}")
 #                     print(f"  {'Altitude':<20}: {alt} m")
@@ -357,47 +357,47 @@ if __name__ == "__main__":
 #                 except Exception as e:
 #                     result(WARN, f"Parse error: {e}")
 #             else:
-#                 sys.stdout.write(f"\r  [{elapsed:3d}s/{timeout}s] Menunggu fix... (belum ada sinyal GPS)")
+#                 sys.stdout.write(f"\r  [{elapsed:3d}s/{timeout}s] Menunggu fix... (belum ada signal GPS)")
 #                 sys.stdout.flush()
 #         else:
-#             sys.stdout.write(f"\r  [{elapsed:3d}s/{timeout}s] Tidak ada respons AT+CGPSINFO")
+#             sys.stdout.write(f"\r  [{elapsed:3d}s/{timeout}s] None respons AT+CGPSINFO")
 #             sys.stdout.flush()
 
 #         time.sleep(interval)
 #         elapsed += interval + 1
 
 #     print()
-#     result(FAIL, f"GPS timeout setelah {timeout} detik.")
+#     result(FAIL, f"GPS timeout after {timeout} seconds.")
 #     result(INFO, "Raw terakhir:", repr(last_raw[:100]))
 #     print("\n  Tips:")
-#     print("  - Pindah ke tempat lebih terbuka (dekat jendela / outdoor)")
-#     print("  - Tunggu lebih lama: tambah --gps-timeout 180")
-#     print("  - Cek koneksi antena GPS ke modul")
+#     print("  - Pindah ke tempat lebih open (dekat jendela / outdoor)")
+#     print("  - Tunggu lebih old: tambah --gps-timeout 180")
+#     print("  - Check connection antenna GPS ke module")
 #     return False
 
 
-# # ─── Test 6: Koneksi data internet ───────────────────────────────
+# # ─── Test 6: Connection data internet ───────────────────────────────
 # def test_data_connection(ser: serial.Serial, apn: str = "internet") -> bool:
-#     header("TEST 6: Koneksi Data Internet")
+#     header("TEST 6: Connection Data Internet")
 
-#     # Cek apakah sudah dapat IP (via NetworkManager/ModemManager)
+#     # Check apakah sudah dapat IP (via NetworkManager/ModemManager)
 #     resp = send_at(ser, "AT+CGPADDR=1", wait=2)
 #     ip = re.search(r'(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})', resp)
 #     if ip:
 #         result(OK, "IP address aktif:", ip.group(1))
 #     else:
-#         result(WARN, "Belum ada IP dari modem langsung")
-#         result(INFO, "Cek dengan: ip addr show  atau  ping 8.8.8.8")
+#         result(WARN, "Belum ada IP from modem directly")
+#         result(INFO, "Check with: ip addr show  or  ping 8.8.8.8")
 
-#     # Cek APN yang terkonfigurasi
+#     # Check APN that terkonfigurasi
 #     resp = send_at(ser, "AT+CGDCONT?", wait=2)
 #     result(INFO, "APN config:", resp.replace("\r\n", " | ").strip())
 
-#     # Set APN jika belum
+#     # Set APN if belum
 #     if apn not in resp:
 #         result(INFO, f"Setting APN ke '{apn}'...")
 #         send_at(ser, f'AT+CGDCONT=1,"IP","{apn}"')
-#         result(INFO, "APN diset. Restart modem jika perlu.")
+#         result(INFO, "APN diset. Restart modem if perlu.")
 
 #     return True
 
@@ -407,7 +407,7 @@ if __name__ == "__main__":
 #     parser = argparse.ArgumentParser(description="SIM7600E Diagnostic Test")
 #     parser.add_argument("--port",        default=None,    help="Port serial, contoh: /dev/ttyUSB2")
 #     parser.add_argument("--baudrate",    default=115200,  type=int)
-#     parser.add_argument("--gps-timeout", default=90,      type=int, help="Timeout GPS fix (detik)")
+#     parser.add_argument("--gps-timeout", default=90,      type=int, help="Timeout GPS fix (seconds)")
 #     parser.add_argument("--apn",         default="internet")
 #     parser.add_argument("--skip-gps",   action="store_true", help="Skip test GPS")
 #     args = parser.parse_args()
@@ -421,12 +421,12 @@ if __name__ == "__main__":
 #     if not port:
 #         sys.exit(1)
 
-#     # Buka koneksi serial
+#     # Buka connection serial
 #     try:
 #         ser = serial.Serial(port, args.baudrate, timeout=2)
-#         result(OK, f"Serial terbuka: {port} @ {args.baudrate} baud")
+#         result(OK, f"Serial open: {port} @ {args.baudrate} baud")
 #     except Exception as e:
-#         result(FAIL, f"Gagal buka serial port: {e}")
+#         result(FAIL, f"Failed buka serial port: {e}")
 #         print(f"\n  Coba: sudo chmod 666 {port}")
 #         sys.exit(1)
 
@@ -444,7 +444,7 @@ if __name__ == "__main__":
 #         if test_sim_card(ser):
 #             passed += 1
 
-#         # Test 4: Sinyal
+#         # Test 4: Signal
 #         total += 1
 #         if test_signal(ser):
 #             passed += 1
@@ -468,11 +468,11 @@ if __name__ == "__main__":
 #     # ─── Ringkasan ───────────────────────────────────────────────
 #     header(f"RINGKASAN: {passed}/{total} test lulus")
 #     if passed == total:
-#         print("  Semua test LULUS. Modul siap digunakan.\n")
+#         print("  All test LULUS. Module ready digunakan.\n")
 #     elif passed >= total - 1:
-#         print("  Hampir semua test lulus. Cek warning di atas.\n")
+#         print("  Hampir all test lulus. Check warning di atas.\n")
 #     else:
-#         print("  Ada test yang GAGAL. Selesaikan masalah di atas.\n")
+#         print("  Ada test that FAILED. Selesaikan masalah di atas.\n")
 #         print("  Perintah debug tambahan:")
 #         print("    ls -la /dev/ttyUSB*")
 #         print("    dmesg | grep ttyUSB")

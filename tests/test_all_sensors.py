@@ -1,9 +1,9 @@
 """
-TEST — Semua sensor sekaligus (hardware, satu putaran baca)
+TEST — All sensor sekaligus (hardware, satu putaran read)
 
-Jalankan PALING TERAKHIR setelah semua test individual lulus.
-Mensimulasikan satu siklus baca lengkap seperti yang dilakukan main.py,
-termasuk kalkulasi smokeLevel dari MQ-2 + MQ-135.
+Run PALING TERAKHIR after all test individual lulus.
+Mensimulasikan satu read cycle lengkap seperti that dilakukan main.py,
+termasuk kalkulasi smokeLevel from MQ-2 + MQ-135.
 
 Usage: python3 tests/test_all_sensors.py
 """
@@ -18,7 +18,7 @@ def smoke(mq2, mq135):
     return round(min((n2 * settings.SMOKE_WEIGHT_MQ2 + n135 * settings.SMOKE_WEIGHT_MQ135) * 100, 100.0), 2)
 
 print("=" * 60)
-print("  TEST SEMUA SENSOR (hardware, satu putaran)")
+print("  TEST ALL SENSOR (hardware, satu putaran)")
 print("=" * 60)
 
 TESTS = [
@@ -44,9 +44,9 @@ for name, mod_path, cls_name in TESTS:
         sensor_data[name] = reading
     except Exception as e:
         print(f"  → GAGAL: {e}")
-        results[name] = "GAGAL"
+        results[name] = "FAILED"
 
-# smokeLevel dari MQ-2 + MQ-135
+# smokeLevel from MQ-2 + MQ-135
 if "MQ-2" in sensor_data and "MQ-135" in sensor_data:
     sl = smoke(sensor_data["MQ-2"].get("ppm",0), sensor_data["MQ-135"].get("ppm",0))
     sl_status = "CRITICAL" if sl>=70 else "WARNING" if sl>=60 else "normal"
@@ -60,12 +60,12 @@ print("=" * 60)
 for name, status in results.items():
     print(f"  {'✅' if status=='OK' else '❌'} {status:6s}  {name}")
 
-if "GAGAL" in results.values():
-    print("\nUntuk sensor GAGAL:")
-    print("  - SPI: ls /dev/spidev*  (MQ-2/MQ-135/soil/pressure — semua lewat MCP3008)")
+if "FAILED" in results.values():
+    print("\nUntuk sensor FAILED:")
+    print("  - SPI: ls /dev/spidev*  (MQ-2/MQ-135/soil/pressure — all through MCP3008)")
     print("  - I2C: i2cdetect -y 1   (BME280)")
     print("  - USB: ls /dev/ttyUSB*  (anemometer RS485)")
-    print("  - Cek docs/Pinout.md untuk wiring lengkap")
+    print("  - Check docs/Pinout.md for wiring lengkap")
     sys.exit(1)
 else:
-    print("\n✅ Semua sensor OK. Siap jalankan main.py.")
+    print("\n✅ All sensor OK. Ready run main.py.")

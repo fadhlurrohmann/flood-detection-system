@@ -1,22 +1,22 @@
 """
-NullSensor — fallback kalau sensor fisik GAGAL diinisialisasi
-(tidak terpasang, driver tidak ada, port/bus tidak ketemu saat startup).
+NullSensor — fallback if physical sensor Failed to initialize
+(not installed, driver none, port/bus not ketemu when startup).
 
-Tujuan: supaya EFWS tetap bisa jalan walau salah satu sensor (apapun itu)
-tidak ada, tanpa harus mengubah kode payload builder / threshold evaluator
+Tujuan: so that EFWS tetap bisa jalan walau wrong satu sensor (apapun itu)
+none, without harus mengubah kode payload builder / threshold evaluator
 di main.py sama sekali.
 
-PENTING soal tipe data: semua field numerik di bawah SELALU bernilai Python
-`None` (bukan string "None", bukan pesan error). `None` -> JSON `null` dan
-SQLite `NULL` secara otomatis, jadi kolom REAL/float tidak pernah menerima
-teks. Pesan error/alasan kenapa sensor tidak terbaca HANYA disimpan di key
-terpisah `"error"` (bertipe string), TIDAK PERNAH dicampur ke field angka.
+PENTING soal tipe data: all field numerik di bawah SELALU bernilai Python
+`None` (not string "None", not error message). `None` -> JSON `null` dan
+SQLite `NULL` secara otomatis, jadi columns REAL/float not pernah receiving
+text. Error message/reason kenapa sensor not readable ONLY disimpan di key
+separate `"error"` (bertipe string), TIDAK PERNAH dicampur ke field angka.
 
-SENSOR_SCHEMAS mendaftarkan field apa saja yang harusnya ada di setiap
-sensor (persis sama dengan bentuk return sensor aslinya saat sukses), biar
-NullSensor.read() selalu mengembalikan bentuk (shape) yang identik --
-lengkap dengan semua key, cuma isinya null -- baik diakses lewat
-`.get(...)` maupun langsung `dict[...]`.
+SENSOR_SCHEMAS mendaftarkan field apa saja that harusnya ada di each
+sensor (persis sama with bentuk return sensor aslinya when sukses), biar
+NullSensor.read() selalu mengembalikan bentuk (shape) that identik --
+lengkap with all key, only isinya null -- baik diakses through
+`.get(...)` maupun directly `dict[...]`.
 """
 
 SENSOR_SCHEMAS = {
@@ -40,8 +40,8 @@ class NullSensor:
         self._fields = SENSOR_SCHEMAS.get(name, {})
 
     def read(self) -> dict:
-        # Copy dangkal cukup: semua isi field adalah None (immutable) atau
-        # dict nested yang juga cuma berisi None, jadi aman tidak dimutasi.
+        # Copy dangkal cukup: all content field adalah None (immutable) or
+        # dict nested that juga only contains None, jadi safe not dimutasi.
         result = dict(self._fields)
         result["error"] = (
             f"sensor '{self.name}' tidak terbaca/tidak terpasang: {self.reason}"
@@ -50,8 +50,8 @@ class NullSensor:
 
 
 class NullAlarmController:
-    """Fallback kalau relay/sirine gagal diinisialisasi — alarm lokal jadi no-op,
-    tapi status level tetap dicatat, supaya operator tahu."""
+    """Fallback if relay/sirine failed to initialize — alarm local jadi no-op,
+    tapi status level tetap dicatat, so that operator tahu."""
 
     current_level = "none"
 

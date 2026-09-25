@@ -1,15 +1,15 @@
 """
 SIM7600 driver (LTE Cat-4 / 3G) — dipanggil oleh sim_detector.py
-ketika hardware SIM7600 terdeteksi di port serial.
+ketika hardware SIM7600 detected di port serial.
 
-Perbedaan utama dari A7670E (a7670e.py):
-  GPS power:  AT+CGPS=1  / AT+CGPS=0       (bukan AT+CGNSSPWR)
+Perbedaan main from A7670E (a7670e.py):
+  GPS power:  AT+CGPS=1  / AT+CGPS=0       (not AT+CGNSSPWR)
   GPS query:  AT+CGPSINFO                   (sama)
   Register:   AT+CREG? / AT+CSQ            (sama)
 
 Interface publik (get_gps, get_gps_location, signal_quality, dll) identik
-dengan A7670E sehingga SimInterface di sim_detector.py bisa panggil keduanya
-tanpa tahu modul mana yang dipakai.
+with A7670E sehingga SimInterface di sim_detector.py bisa panggil keduanya
+without tahu module mana that used.
 """
 import re
 import time
@@ -26,7 +26,7 @@ logger = logging.getLogger("efws.sim7600")
 class SIM7600:
     def __init__(self, port=None, baudrate=None):
         if serial is None:
-            raise RuntimeError("pyserial tidak terinstall - pip install pyserial")
+            raise RuntimeError("pyserial is not installed - pip install pyserial")
         self.ser = serial.Serial(
             port or settings.A7670E_AT_PORT,
             baudrate or settings.A7670E_BAUDRATE,
@@ -51,13 +51,13 @@ class SIM7600:
         return self.send_at("AT+CREG?")
 
     def gps_power_on(self) -> bool:
-        # SIM7600 pakai AT+CGPS=1 (berbeda dari A7670E yang pakai AT+CGNSSPWR=1)
+        # SIM7600 use AT+CGPS=1 (berbeda from A7670E that use AT+CGNSSPWR=1)
         resp = self.send_at("AT+CGPS=1", wait=2.0)
         if "OK" in resp or "+CGPS:" in resp:
             self._gnss_on = True
             logger.info("SIM7600 GPS engine ON.")
             return True
-        logger.warning("SIM7600 GPS power ON gagal: %s", resp.strip())
+        logger.warning("SIM7600 GPS power ON failed: %s", resp.strip())
         return False
 
     def gps_power_off(self) -> bool:
@@ -100,7 +100,7 @@ class SIM7600:
     def get_gps(self, timeout: int = 90, interval: float = 3.0) -> dict:
         if not self._gnss_on:
             if not self.gps_power_on():
-                return {"fix": False, "reason": "GPS engine gagal dinyalakan (SIM7600)"}
+                return {"fix": False, "reason": "GPS engine failed dinyalakan (SIM7600)"}
 
         elapsed = 0.0
         while elapsed < timeout:

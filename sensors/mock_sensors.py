@@ -1,9 +1,9 @@
 """
-Mock sensor layer untuk testing TANPA hardware.
-Menghasilkan data realistis dengan variasi acak dan skenario bahaya terjadwal,
-sehingga alarm logic, database, dan API publisher bisa diuji penuh di desktop/Pi.
+Mock sensor layer for testing WITHOUT hardware.
+Menghasilkan data realistis with variasi random dan skenario danger scheduled,
+sehingga alarm logic, database, dan API publisher bisa diuji full di desktop/Pi.
 
-Aktif saat EFWS_RUN_MODE=mock (default).
+Aktif when EFWS_RUN_MODE=mock (default).
 """
 import math
 import random
@@ -12,17 +12,17 @@ import time
 
 # ─── Helper ──────────────────────────────────────────────────────
 def _jitter(value: float, pct: float = 0.05) -> float:
-    """Tambah noise acak ±pct% ke nilai."""
+    """Tambah noise random ±pct% ke value."""
     return round(value * (1 + random.uniform(-pct, pct)), 3)
 
 
 # ─── Base mock ────────────────────────────────────────────────────
 class _MockBase:
-    """Semua mock sensor turunan dari sini; _scenario() bisa override."""
+    """All mock sensor turunan from sini; _scenario() bisa override."""
 
     def _scenario(self) -> str:
-        """Pilih skenario berdasarkan waktu (siklus 2 menit untuk demo)."""
-        t = time.time() % 120          # siklus 120 detik
+        """Pilih skenario berdasarkan waktu (siklus 2 minutes for demo)."""
+        t = time.time() % 120          # siklus 120 seconds
         if t < 80:
             return "normal"
         elif t < 100:
@@ -33,7 +33,7 @@ class _MockBase:
 
 # ─── Submersible Pressure Sensor (water level, loop 4-20mA) ──────
 class MockPressureWater(_MockBase):
-    MA_BASE = {"normal": 14.0, "warning": 7.0, "critical": 4.5}  # makin rendah = makin dangkal/kosong
+    MA_BASE = {"normal": 14.0, "warning": 7.0, "critical": 4.5}  # makin low = makin dangkal/empty
     RANGE_M = 5.0
 
     def read(self) -> dict:
@@ -64,7 +64,7 @@ class MockSoilMoisture(_MockBase):
             "deep":    {"raw": int(900 - deep_pct    / 100 * 520), "moisture_percent": round(deep_pct,    2), "_mock": True},
         }
 
-# ─── Battery — Modul Sensor Tegangan DC 0-25V ────────────────────
+# ─── Battery — Module Sensor Voltage DC 0-25V ────────────────────
 class MockBattery(_MockBase):
     PCT_BASE = {"normal": 85.0, "warning": 42.0, "critical": 15.0}
 
@@ -77,7 +77,7 @@ class MockBattery(_MockBase):
 
 # ─── Mock Alarm (no GPIO) ────────────────────────────────────────
 class MockAlarmController:
-    """Cetak level alarm ke console; tidak sentuh GPIO."""
+    """Cetak level alarm ke console; not sentuh GPIO."""
 
     LEVELS = {"none": "🟢", "warning": "🟡", "critical": "🔴"}
     current_level = "none"

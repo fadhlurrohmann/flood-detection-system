@@ -1,30 +1,30 @@
 """
-CHECK — GPS / GNSS (verifikasi data GPS BENAR-BENAR datang dari modul fisik
-A7670E/SIM7670E atau SIM7600, bukan cache/fallback config lama)
+CHECK — GPS / GNSS (verifikasi data GPS BENAR-BENAR datang from physical module
+A7670E/SIM7670E or SIM7600, not cache/fallback config old)
 
 Kenapa perlu script ini:
-  main.py hanya memakai GPS secara pasif (poll tiap siklus). Script ini
+  main.py only memakai GPS secara pasif (poll every siklus). Script ini
   secara eksplisit:
-    1. Deteksi modul yang terpasang (A7670E atau SIM7600) beserta port-nya.
-    2. Cek modul benar-benar merespons AT command (bukan port mati/nyasar).
-    3. Nyalakan GNSS & polling AT+CGPSINFO sampai dapat fix atau timeout.
-    4. Tampilkan RAW NMEA response dari modul (+CGPSINFO: ...) sebagai bukti
-       data itu benar-benar baru dibaca sekarang dari GNSS engine, bukan
-       nilai lama/hasil hardcode.
+    1. Deteksi module that installed (A7670E or SIM7600) beserta port-nya.
+    2. Check module correct-correct merespons AT command (not port mati/nyasar).
+    3. Turn on GNSS & polling AT+CGPSINFO sampai dapat fix or timeout.
+    4. Tampilkan RAW NMEA response from module (+CGPSINFO: ...) sebagai bukti
+       data itu correct-correct new dibaca sekarang from GNSS engine, not
+       value old/result hardcode.
     5. Cetak ringkasan PASS/FAIL, dan SEKALIGUS tulis hasilnya ke efws.log
-       (logger yang sama dipakai main.py) supaya ada jejak permanen.
+       (logger that sama used main.py) so that ada jejak permanen.
 
 PENTING (kenapa file ini TIDAK bernama tests/test_gps.py):
-  Ditaruh di tests/hardware_checks/ dengan prefix "check_" (bukan "test_")
-  supaya TIDAK ikut ter-collect oleh pytest -- script ini mengakses hardware
-  serial sungguhan (buka port /dev/ttyUSBx) yang akan crash/hang kalau
-  pytest mencoba meng-import-nya di lingkungan tanpa modem (CI, laptop dev,
-  dst). Jalankan manual, bukan lewat pytest.
+  Ditaruh di tests/hardware_checks/ with prefix "check_" (not "test_")
+  so that TIDAK ikut ter-collect oleh pytest -- script ini mengakses hardware
+  serial sungguhan (buka port /dev/ttyUSBx) that akan crash/hang if
+  pytest trying meng-import-nya di lingkungan without modem (CI, laptop dev,
+  dst). Run manual, not through pytest.
 
 Usage:
   python3 tests/hardware_checks/check_gps.py
   python3 tests/hardware_checks/check_gps.py --timeout 120
-  python3 tests/hardware_checks/check_gps.py --force        # abaikan .sim_cache, scan ulang port
+  python3 tests/hardware_checks/check_gps.py --force        # abaikan .sim_cache, scan again port
   python3 tests/hardware_checks/check_gps.py --port /dev/ttyUSB2 --module a7670e   # paksa, skip auto-detect
 """
 import sys
@@ -38,9 +38,9 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspa
 
 from config import settings
 
-# ─── Logger: pakai handler yang SAMA dengan main.py (console + efws.log) ────
-# Supaya hasil check ini juga permanen tercatat di file log yang sama,
-# bukan cuma tampil di layar lalu hilang.
+# ─── Logger: use handler that SAMA with main.py (console + efws.log) ────
+# So that result check ini juga permanen tercatat di file log that sama,
+# not only tampil di layar lalu hilang.
 Path(settings.LOG_PATH).parent.mkdir(parents=True, exist_ok=True)
 logging.basicConfig(
     level=logging.INFO,
@@ -70,22 +70,22 @@ def result(status, label, value=""):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Cek apakah GPS benar-benar mengambil data dari A7670E/SIM7600")
+    parser = argparse.ArgumentParser(description="Check apakah GPS correct-correct mengambil data from A7670E/SIM7600")
     parser.add_argument("--timeout", type=int, default=settings._int("EFWS_GPS_TIMEOUT", 90),
-                         help="Detik menunggu GNSS fix (default: EFWS_GPS_TIMEOUT / 90s)")
-    parser.add_argument("--force", action="store_true", help="Abaikan .sim_cache, scan ulang semua port")
-    parser.add_argument("--port", default=None, help="Paksa port tertentu (skip auto-scan), butuh --module")
+                         help="Seconds menunggu GNSS fix (default: EFWS_GPS_TIMEOUT / 90s)")
+    parser.add_argument("--force", action="store_true", help="Abaikan .sim_cache, scan again all port")
+    parser.add_argument("--port", default=None, help="Paksa port tertentu (skip auto-scan), needs --module")
     parser.add_argument("--module", choices=["a7670e", "sim7600"], default=None,
-                         help="Paksa modul tertentu (dipakai bersama --port)")
+                         help="Paksa module tertentu (used bersama --port)")
     args = parser.parse_args()
 
-    header("CHECK GPS — Deteksi modul & ambil fix nyata")
+    header("CHECK GPS — Deteksi module & get fix real")
 
     if settings.RUN_MODE == "mock":
-        result(WARN, "RUN_MODE=mock", "GPS akan disimulasikan (MockSimInterface), BUKAN data hardware asli")
-        print("  Set EFWS_RUN_MODE=hardware di .env untuk tes modul fisik sungguhan.")
+        result(WARN, "RUN_MODE=mock", "GPS akan disimulasikan (MockSimInterface), BUKAN data hardware original")
+        print("  Set EFWS_RUN_MODE=hardware di .env for tes physical module sungguhan.")
 
-    # ── 1) Deteksi / pilih modul ──────────────────────────────────
+    # ── 1) Deteksi / pilih module ──────────────────────────────────
     from communication.sim_detector import detect_sim, SimInterface, scan_ports
 
     try:
@@ -93,35 +93,35 @@ def main():
             header(f"Paksa modul: {args.module.upper()} @ {args.port}")
             sim = SimInterface(port=args.port, module=args.module)
         else:
-            header("Auto-detect modul SIM (A7670E vs SIM7600)")
+            header("Auto-detect SIM module (A7670E vs SIM7600)")
             sim = detect_sim(force_scan=args.force)
     except Exception as e:
-        result(FAIL, "Deteksi modul", str(e))
-        logger.error("GPS CHECK GAGAL total -- tidak ada modul SIM terdeteksi: %s", e)
+        result(FAIL, "Deteksi module", str(e))
+        logger.error("GPS CHECK FAILED total -- none SIM module detected: %s", e)
         sys.exit(1)
 
     is_mock = getattr(sim, "module", "") == "mock"
-    result(OK if not is_mock else WARN, "Modul terdeteksi", f"{sim.module.upper()} @ {sim.port}")
+    result(OK if not is_mock else WARN, "Module detected", f"{sim.module.upper()} @ {sim.port}")
 
-    # ── 2) Modul benar-benar merespons AT (bukan port mati) ────────
-    header("Cek modul merespons AT command")
+    # ── 2) Module correct-correct merespons AT (not port mati) ────────
+    header("Check module merespons AT command")
     try:
         alive = sim.check_module()
-        result(OK if alive else FAIL, "AT ping", "OK" if alive else "TIDAK merespons")
+        result(OK if alive else FAIL, "AT ping", "OK" if alive else "Does not respond")
         if not alive and not is_mock:
-            logger.error("GPS CHECK: modul %s @ %s TIDAK merespons AT command.", sim.module.upper(), sim.port)
+            logger.error("GPS CHECK: module %s @ %s Does not respond AT command.", sim.module.upper(), sim.port)
     except Exception as e:
         result(FAIL, "AT ping", str(e))
 
     try:
         csq = sim.signal_quality().strip()
-        result(INFO, "Kualitas sinyal (AT+CSQ)", csq.replace("\r\n", " | "))
+        result(INFO, "Kualitas signal (AT+CSQ)", csq.replace("\r\n", " | "))
     except Exception as e:
-        result(WARN, "Kualitas sinyal", f"gagal baca: {e}")
+        result(WARN, "Kualitas signal", f"gagal baca: {e}")
 
-    # ── 3) Ambil GPS fix NYATA (polling AT+CGPSINFO) ──────────────
+    # ── 3) Get GPS fix REAL (polling AT+CGPSINFO) ──────────────
     header(f"Minta GPS fix (timeout {args.timeout}s) -- ini akan menunggu, pastikan antena GNSS di luar/langit terbuka")
-    logger.info("GPS CHECK: mulai polling fix dari %s @ %s (timeout=%ds)",
+    logger.info("GPS CHECK: start polling fix from %s @ %s (timeout=%ds)",
                 sim.module.upper(), sim.port, args.timeout)
 
     gps_result = sim.get_gps(timeout=args.timeout)
@@ -131,16 +131,16 @@ def main():
         result(INFO, "Altitude", f"{gps_result.get('altitude_m')} m")
         result(INFO, "Waktu fix (UTC)", f"{gps_result.get('date_utc')} {gps_result.get('time_utc')}")
 
-        # Bukti langsung bahwa ini data LIVE dari modul, bukan nilai lama:
-        # tampilkan raw NMEA response persis seperti yang dikirim modul.
+        # Bukti directly bahwa ini data LIVE from module, not value old:
+        # tampilkan raw NMEA response persis seperti that sent module.
         raw_nmea = gps_result.get("raw")
         if raw_nmea:
-            result(INFO, "RAW +CGPSINFO dari modul", raw_nmea)
+            result(INFO, "RAW +CGPSINFO from module", raw_nmea)
         if gps_result.get("_mock"):
-            result(WARN, "PERHATIAN", "Ini data MOCK (RUN_MODE=mock) -- BUKAN dari hardware GPS sungguhan.")
+            result(WARN, "PERHATIAN", "Ini data MOCK (RUN_MODE=mock) -- BUKAN from hardware GPS sungguhan.")
 
         logger.info(
-            "GPS CHECK SUKSES: fix nyata dari %s @ %s -> lat=%.6f lon=%.6f alt=%sm waktu=%s %s | raw=%s",
+            "GPS CHECK SUKSES: fix real from %s @ %s -> lat=%.6f lon=%.6f alt=%sm waktu=%s %s | raw=%s",
             sim.module.upper(), sim.port,
             gps_result["lat"], gps_result["lon"],
             gps_result.get("altitude_m"), gps_result.get("date_utc"), gps_result.get("time_utc"),
@@ -148,16 +148,16 @@ def main():
         )
         exit_code = 0
     else:
-        reason = gps_result.get("reason", "tidak diketahui")
+        reason = gps_result.get("reason", "not diketahui")
         result(FAIL, "GPS TIDAK fix", reason)
         logger.warning(
-            "GPS CHECK GAGAL fix: modul %s @ %s tidak mendapat fix dalam %ds. Alasan: %s",
+            "GPS CHECK FAILED fix: module %s @ %s not mendapat fix dalam %ds. Reason: %s",
             sim.module.upper(), sim.port, args.timeout, reason,
         )
-        print("\n  Kemungkinan penyebab:")
-        print("   - Antena GNSS belum terpasang / kabelnya lepas")
-        print("   - Modul di dalam ruangan / langit tertutup (GNSS butuh line-of-sight ke satelit)")
-        print("   - Cold start pertama kali bisa butuh 30-60+ detik, coba --timeout lebih besar")
+        print("\n  Possibly penyebab:")
+        print("   - Antenna GNSS belum installed / kabelnya lepas")
+        print("   - Module di dalam room / sky blocked (GNSS needs line-of-sight ke satelit)")
+        print("   - Cold start pertama kali bisa needs 30-60+ seconds, coba --timeout lebih besar")
         exit_code = 1
 
     sim.close()

@@ -59,12 +59,12 @@
   (`AlarmController`) turns it into two escalation levels (WARNING = slow pulse,
   CRITICAL = continuously on) through the same relay. This hardware has no
   separate buzzer.
-- **communication/**: `sim_detector.py` auto-detect modul 4G that installed
+- **communication/**: `sim_detector.py` auto-detect module 4G that installed
   (A7670E or SIM7600), and `api_publisher.py` is the only outbound data path
   (REST API + offline queue). This project does not use MQTT or Telegram.
-- **database/**: `db_manager.py` menyimpan setiap pembacaan sensor mentah +
+- **database/**: `db_manager.py` menyimpan each pembacaan sensor raw +
   the exact API payload, and manages the offline queue. It does not store the
   alarm level or thresholds; that is the backend's responsibility.
-- **config/**: `settings.py` memusatkan semua pin/channel/kredensial;
+- **config/**: `settings.py` memusatkan all pin/channel/kredensial;
   `thresholds.json` centralizes warning/critical limits for the LOCAL siren only.
 - **main.py**: read → save to DB → evaluate locally (siren) → send/queue → repeat.

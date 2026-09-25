@@ -1,9 +1,9 @@
 """
-TEST 7 — Relay 5V + Sirine 12V/24V/220V 120dB (dengan LED flasher)
+TEST 7 — Relay 5V + Sirine 12V/24V/220V 120dB (with LED flasher)
 
-⚠️  PERINGATAN: Sirine ini 120dB - SANGAT KERAS. Pastikan Anda siap
-    sebelum menjalankan test ini (tutup telinga / jaga jarak / beri tahu
-    orang sekitar). Test ini akan benar-benar menyalakan sirine fisik.
+⚠️  WARNING: Sirine ini 120dB - SANGAT KERAS. Make sure Anda ready
+    before menjalankan test ini (tutup telinga / jaga distance / beri tahu
+    orang sekitar). Test ini akan correct-correct menyalakan sirine physical.
 
 Usage: python3 tests/test_relay_siren.py
 """
@@ -18,7 +18,7 @@ print("=" * 60)
 print("  TEST Relay + Sirine 12V (120dB)")
 print("=" * 60)
 print("⚠️  Sirine akan BERBUNYI KERAS pada test ini.")
-confirm = input("Ketik 'ya' untuk lanjut, atau Enter untuk batal: ").strip().lower()
+confirm = input("Ketik 'ya' for lanjut, or Enter for batal: ").strip().lower()
 if confirm != "ya":
     print("Dibatalkan.")
     sys.exit(0)
@@ -31,25 +31,25 @@ except Exception as e:
     sys.exit(1)
 
 try:
-    print("Tahap 1: Relay ON langsung 2 detik (cek bunyi 'klik' relay + sirine menyala)...")
+    print("Tahap 1: Relay ON directly 2 seconds (check bunyi 'klik' relay + sirine active)...")
     ctrl.relay.on()
     time.sleep(2)
     ctrl.relay.off()
-    print("Tahap 1 selesai - relay OFF.\n")
+    print("Tahap 1 complete - relay OFF.\n")
     time.sleep(1)
 
-    print("Tahap 2: Level WARNING selama 5 detik (sirine berdenyut pelan 0.4s ON/1.6s OFF)...")
+    print("Tahap 2: Level WARNING selama 5 seconds (sirine berdenyut pelan 0.4s ON/1.6s OFF)...")
     ctrl.set_level(AlarmController.LEVEL_WARNING)
     time.sleep(5)
 
-    print("Tahap 3: Level CRITICAL selama 3 detik (sirine menyala TERUS)...")
+    print("Tahap 3: Level CRITICAL selama 3 seconds (sirine active TERUS)...")
     ctrl.set_level(AlarmController.LEVEL_CRITICAL)
     time.sleep(3)
 
 finally:
     ctrl.silence()
     print("\n[SELESAI] Alarm dimatikan (relay OFF).")
-    print("Kalau sirine tidak bunyi sama sekali, cek:")
-    print("  - Wiring relay COM/NO ke jalur 12V sirine (lihat docs/Pinout.md)")
-    print("  - active_low salah (coba Relay(active_low=False) di alarm/relay.py)")
-    print("  - Sumber 12V untuk sirine belum tersambung/aktif")
+    print("If sirine not bunyi sama sekali, check:")
+    print("  - Wiring relay COM/NO ke jalur 12V sirine (see docs/Pinout.md)")
+    print("  - active_low wrong (coba Relay(active_low=False) di alarm/relay.py)")
+    print("  - Sumber 12V for sirine belum connected/aktif")

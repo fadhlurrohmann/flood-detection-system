@@ -1,13 +1,13 @@
 """
-Modul Sensor Tegangan DC 0-25V — monitoring baterai (voltage divider bawaan modul).
-Lewat MCP3008 CH5 via Logic Level Converter yang sama dengan sensor analog lain.
+Module Sensor Voltage DC 0-25V — monitoring battery (voltage divider bawaan module).
+Through MCP3008 CH5 via Logic Level Converter that sama with sensor analog lain.
 
-Input : terhubung langsung ke terminal Battery+ dan Battery-
-Output: pin S → 0-5V proporsional terhadap tegangan input (0-25V)
+Input : connected directly ke terminal Battery+ dan Battery-
+Output: pin S → 0-5V proporsional terhadap voltage input (0-25V)
 
 Kalkulasi:
   V_battery = (raw / 1023) × BATTERY_SENSOR_MAX_V
-  Karena LLC scale linear (HV=5V↔LV=3.3V), faktor LLC saling meniadakan:
+  Because LLC scale linear (HV=5V↔LV=3.3V), faktor LLC saling meniadakan:
   raw/1023 = V_lv/3.3 = (V_s × 3.3/5) / 3.3 = V_s/5 = V_battery/25
   → V_battery = raw × 25 / 1023
 """

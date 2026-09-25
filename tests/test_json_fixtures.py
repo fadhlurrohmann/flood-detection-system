@@ -1,10 +1,10 @@
 """
-TEST — Kirim semua fixture JSON ke /sensors/telemetry untuk verifikasi.
+TEST — Send all fixture JSON ke /sensors/telemetry for verifikasi.
 
-Berguna untuk:
-  - Konfirmasi format payload diterima API/backend dengan benar
-  - Lihat tampilan tiap skenario di webhook.site sebelum hardware terpasang
-  - Cek edge case smokeLevel tanpa perlu sensor asli
+Berguna for:
+  - Konfirmasi format payload received API/backend with correct
+  - See tampilan every skenario di webhook.site before hardware installed
+  - Check edge case smokeLevel without perlu real sensor
 
 Usage:
   python3 tests/test_json_fixtures.py
@@ -32,7 +32,7 @@ def main():
 
     if "webhook.site/xxxxxxxx" in settings.API_BASE_URL:
         print("[FAIL] EFWS_API_URL masih placeholder di .env")
-        print("Isi dengan URL dari https://webhook.site atau jalankan tools/mock_api_server.py")
+        print("Content with URL from https://webhook.site or run tools/mock_api_server.py")
         sys.exit(1)
 
     if args.file:
@@ -67,9 +67,9 @@ def main():
     print(f"\n{'='*60}")
     print(f"Selesai: {ok_count}/{total} berhasil.")
     if ok_count == total:
-        print("✅ Semua fixture terkirim — cek webhook.site/mock server.")
+        print("✅ All fixture sent — check webhook.site/mock server.")
     else:
-        print("❌ Ada yang gagal — cek koneksi dan EFWS_API_URL di .env.")
+        print("❌ Ada that failed — check connection dan EFWS_API_URL di .env.")
 
 if __name__ == "__main__":
     main()
