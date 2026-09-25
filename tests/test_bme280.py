@@ -1,9 +1,9 @@
 """
-TEST — BME280 (suhu / kelembaban / tekanan ambient, I2C)
+TEST — BME280 (temperature / humidity / pressure ambient, I2C)
 
-Check dulu before run:
+Check first before run:
   sudo raspi-config → Interface Options → I2C → Yes
-  i2cdetect -y 1     → harus muncul 0x76 (or 0x77 if alamat berbeda)
+  i2cdetect -y 1     → must appears 0x76 (or 0x77 if address different)
 
 Usage: python3 tests/test_bme280.py
 """
@@ -19,11 +19,11 @@ print("=" * 60)
 try:
     sensor = BME280Sensor()
 except Exception as e:
-    print(f"❌ Gagal inisialisasi: {e}")
-    print("Check: i2cdetect -y 1 harus menunjukkan alamat BME280 (0x76/0x77)")
+    print(f"❌ Failed inisialisasi: {e}")
+    print("Check: i2cdetect -y 1 must shows address BME280 (0x76/0x77)")
     sys.exit(1)
 
-print("Reading 5x, every 2 seconds (Ctrl+C for stop lebih awal)...\n")
+print("Reading 5x, every 2 seconds (Ctrl+C for stop more early)...\n")
 try:
     for i in range(5):
         reading = sensor.read()
@@ -36,4 +36,4 @@ try:
         time.sleep(2)
     print("\n✅ BME280 read successfully.")
 except KeyboardInterrupt:
-    print("\nDihentikan oleh user.")
+    print("\nStopped by user.")

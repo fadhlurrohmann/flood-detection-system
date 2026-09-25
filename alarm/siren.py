@@ -1,17 +1,17 @@
 """
-AlarmController - mengendalikan relay that men-switch sirine 12V/24V/220V
+AlarmController - controls relay that switches siren 12V/24V/220V
 120dB with LED flasher bawaan.
 
-None buzzer separate di hardware (sesuai daftar komponen) - jadi
-2 tingkat eskalasi dibuat ONLY from satu relay that sama:
+None buzzer separate in hardware (according to list components) - therefore
+Two escalation levels are produced by the same single relay:
 
-  WARNING  -> sirine berdenyut pelan (nyala 0.4s / mati 1.6s) sebagai
-              pre-alarm that masih bisa "diabaikan" sebentar
-  CRITICAL -> sirine active TERUS-MENERUS (siaga full)
+  WARNING  -> siren pulses slowly (on 0.4s / off 1.6s) as
+              pre-alarm that still can "ignored" briefly
+  CRITICAL -> siren active CONTINUOUSLY-MENERUS (siaga full)
 
-Pulsing for level WARNING run di background thread so that not
-memblokir loop main main.py (that tetap perlu lanjut read sensors & send
-data every beberapa seconds sementara alarm WARNING aktif).
+Pulsing for level WARNING run in background thread so that not
+memblokir loop main main.py (that still needs continue read sensors & send
+data every several seconds while alarm WARNING active).
 """
 import threading
 import time
@@ -56,7 +56,7 @@ class AlarmController:
             return
         self.current_level = level
 
-        # Selalu hentikan dulu pola pulsing old before set state new
+        # Always stop first pattern pulsing old before set state new
         self._stop_pulse()
 
         if level == self.LEVEL_NONE:
@@ -71,16 +71,16 @@ class AlarmController:
 
 
 if __name__ == "__main__":
-    # Test cepat manual: python alarm/siren.py
+    # Test fast manual: python alarm/siren.py
     ctrl = AlarmController()
     try:
-        print("WARNING selama 5 seconds (denyut pelan)...")
+        print("WARNING during 5 seconds (denyut slowly)...")
         ctrl.set_level(AlarmController.LEVEL_WARNING)
         time.sleep(5)
 
-        print("CRITICAL selama 5 seconds (nyala terus)...")
+        print("CRITICAL during 5 seconds (on continuously)...")
         ctrl.set_level(AlarmController.LEVEL_CRITICAL)
         time.sleep(5)
     finally:
         ctrl.silence()
-        print("Alarm dimatikan.")
+        print("Alarm turned off.")

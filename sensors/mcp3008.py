@@ -1,27 +1,27 @@
 """
-Driver MCP3008 (ADC 8-channel, 10-bit, via SPI) — menggantikan ADS1115.
+Driver MCP3008 (ADC 8-channel, 10-bit, via SPI) — replaces ADS1115.
 
-MCP3008 used because Pi 4 not punya pin analog. All sensor analog
+MCP3008 used because Pi 4 not has pin analog. All sensor analog
 (MQ-2, MQ-135, soil moisture x2, pressure sensor, battery voltage sensor)
-connected ke satu chip MCP3008 that sama, dibaca through SPI hardware (SPI0, CE0).
+connected to one chip MCP3008 that same, read through SPI hardware (SPI0, CE0).
 
-PENTING soal voltage:
-  - MCP3008 VDD/VREF harus 3.3V (NOT 5V) because connected directly ke
-    Pi without level shifter di sisi SPI.
-  - Tapi MQ-2/MQ-135/soil probe/battery sensor outputnya 0-5V → SETIAP
-    channel analog MCP3008 that receiving signal from sensor 5V WAJIB
-    melewati logic level converter (sisi HV=5V ke sensor, sisi LV=3.3V ke
-    MCP3008), if not pembacaan akan clipping/jenuh di ~3.3V dan bisa
-    merusak chip dalam jangka panjang.
+IMPORTANT regarding voltage:
+  - MCP3008 VDD/VREF must 3.3V (NOT 5V) because connected directly to
+    Pi without level shifter in side SPI.
+  - But MQ-2/MQ-135/soil probe/battery sensor outputs 0-5V → EVERY
+    channel analog MCP3008 that receiving signal from sensor 5V REQUIRED
+    exceeds logic level converter (side HV=5V to sensor, side LV=3.3V to
+    MCP3008), if not reading will clipping/jenuh in ~3.3V and can
+    merusak chip inside jangka panjang.
 
-Pemetaan channel default (see docs/Pinout.md for detail wiring):
+Pemetaan channel default (see docs/Pinout.md for details wiring):
   CH0 → MQ-2 (through LLC)
   CH1 → MQ-135 (through LLC)
   CH2 → Soil moisture — surface (through LLC)
   CH3 → Soil moisture — deep (through LLC)
   CH4 → Submersible pressure sensor, via burden resistor (through LLC)
   CH5 → Battery voltage sensor module (through LLC)
-  CH6-CH7 → backup/ekspansi
+  CH6-CH7 → backup/expansion
 
 Requires: pip install spidev
 """
@@ -37,7 +37,7 @@ except ImportError:
 
 
 class MCP3008:
-    """Satu instance merepresentasikan satu chip MCP3008 physical di SPI0/CE0."""
+    """One instance represents one chip MCP3008 physical in SPI0/CE0."""
 
     def __init__(self, bus=None, device=None, max_speed_hz=None, vref=None):
         if spidev is None:
@@ -55,7 +55,7 @@ class MCP3008:
     def read_raw(self, channel: int) -> int:
         """Read channel 0-7, return raw value 0-1023 (10-bit)."""
         if not 0 <= channel <= 7:
-            raise ValueError("MCP3008 channel harus 0-7")
+            raise ValueError("MCP3008 channel must 0-7")
         cmd = [1, (8 + channel) << 4, 0]
         resp = self.spi.xfzer2(cmd)
         value = ((resp[1] & 3) << 8) + resp[2]
@@ -70,9 +70,8 @@ class MCP3008:
 
 
 # ─── Singleton helper ──────────────────────────────────────────────
-# All sensor analog berbagi SATU chip MCP3008 physical that sama, jadi
-# all sensor sebaiknya use instance SPI that sama, not masing-
-# masing buka connection SPI sendiri-sendiri.
+# All analog sensors share one physical MCP3008 chip, so they should use the
+# same SPI instance instead of opening individual SPI connections.
 _instance = None
 
 
@@ -86,7 +85,7 @@ def get_mcp3008() -> "MCP3008":
 if __name__ == "__main__":
     import time
     adc = MCP3008()
-    print(f"MCP3008 dibuka di SPI bus={adc.bus} device={adc.device}, VREF={adc.vref}V")
+    print(f"MCP3008 dibuka in SPI bus={adc.bus} device={adc.device}, VREF={adc.vref}V")
     print("Reading all 8 channel every 1 seconds (Ctrl+C for stop)...\n")
     try:
         while True:

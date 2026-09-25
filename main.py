@@ -1,18 +1,18 @@
 """
 Early Fire Warning System (EFWS) - Main Orchestrator
 
-ARSITEKTUR BARU (see penjelasan lengkap di chat before file ini dibuat):
-  - Siklus read sensors (default 3 minutes) ONLY mengevaluasi threshold.
-    None storage ke SQLite dan none pengiriman if all
-    value di bawah threshold ("nothing happens").
-  - If ADA value that melewati threshold -> "emergency upload": send
-    Location + Telemetry + Heartbeat sekaligus (endpoint 1,2,3).
-  - Endpoint 4 (/sensors/commands/ack) ONLY jalan if response
-    Heartbeat membawa 'commands' -- event-driven, di luar scheduler.
-  - Threshold aktif = remote config (from response Telemetry) di-merge
+NEW ARCHITECTURE (see full explanation in chat before file this was created):
+  - Cycle read sensors (default 3 minutes) ONLY evaluates threshold.
+    No storage to SQLite and no transmission if all
+    value below threshold ("nothing happens").
+  - If EXISTS value that exceeds threshold -> "emergency upload": send
+    Location + Telemetry + Heartbeat simultaneously (endpoint 1,2,3).
+  - Endpoint 4 (/sensors/commands/ack) ONLY running if response
+    Heartbeat carries 'commands' -- event-driven, outside scheduler.
+  - Threshold active = remote config (from response Telemetry) in-merge
     per-field with hardcoded local (config/threshold_resolver.py).
-  - Retry offline queue (every 2 minutes) running di separate thread,
-    independen from siklus read sensors (3 minutes).
+  - Retry offline queue (every 2 minutes) running in separate thread,
+    independent from cycle read sensors (3 minutes).
 """
 import json
 import time
@@ -29,7 +29,7 @@ from config.threshold_resolver import resolve_active_thresholds
 from database.db_manager import DBManager
 from communication.api_publisher import APIPublisher
 
-# ─── Buat folder that dibutuhkan before logger ──────────────────
+# ─── For folder that needed before logger ──────────────────
 Path(settings.LOG_PATH).parent.mkdir(parents=True, exist_ok=True)
 Path(settings.DB_PATH).parent.mkdir(parents=True, exist_ok=True)
 
@@ -61,7 +61,7 @@ def _load_sim():
 # ─── Sensor + alarm factory ──────────────────────────────────────
 def _load_sensors_and_alarm():
     if settings.RUN_MODE == "mock":
-        logger.info("Mode: MOCK — sensor disimulasi, none akses GPIO/I2C")
+        logger.info("Mode: MOCK — sensor simulated, no access GPIO/I2C")
         from sensors.mock_sensors import (
             MockPressureWater, MockSoilMoisture, MockRainfall,
             MockAlarmController,
@@ -72,7 +72,7 @@ def _load_sensors_and_alarm():
             "rain":     MockRainfall(),
         }, MockAlarmController()
     else:
-        logger.info("Mode: HARDWARE — mengakses GPIO/SPI/I2C real")
+        logger.info("Mode: HARDWARE — accesses GPIO/SPI/I2C actual")
         from sensors.pressure    import PressureWaterSensor
         from sensors.soil        import SoilMoistureSensor
         from sensors.rainfall    import RainfallSensor
@@ -84,7 +84,7 @@ def _load_sensors_and_alarm():
             "pressure": PressureWaterSensor,
             "soil":     SoilMoistureSensor,
             "rain":     RainfallSensor,
-            "jarak":    JSN_SR04T,
+            "distance":    JSN_SR04T,
         }
         sensors = {}
         for name, factory in factories.items():
@@ -92,8 +92,8 @@ def _load_sensors_and_alarm():
                 sensors[name] = factory()
             except Exception as e:
                 logger.error(
-                    "Sensor '%s' Failed to initialize (dianggap NOT INSTALLED, "
-                    "nilainya akan 0/null terus di log & payload sampai diperbaiki): %s",
+                    "Sensor '%s' Failed to initialize (treated as NOT INSTALLED, "
+                    "its value will 0/null continuously in log & payload until repaired): %s",
                     name, e,
                 )
                 sensors[name] = NullSensor(name, str(e))
@@ -102,8 +102,8 @@ def _load_sensors_and_alarm():
             alarm = AlarmController()
         except Exception as e:
             logger.error(
-                "Alarm controller (relay/sirine) Failed to initialize — alarm local "
-                "disabled (sistem tetap jalan, only sirine that not active): %s", e,
+                "Alarm controller (relay/siren) Failed to initialize — alarm local "
+                "disabled (system still running, only siren that not active): %s", e,
             )
             alarm = NullAlarmController(str(e))
 
@@ -117,7 +117,7 @@ def _load_hardcoded_thresholds() -> dict:
 
 
 def _exceeds(value, danger, lower_is_worse) -> bool:
-    """True if value melewati danger threshold. None value -> selalu False (unknown, not alarm)."""
+    """True if value exceeds danger threshold. None value -> always False (unknown, not alarm)."""
     if value is None or danger is None:
         return False
     return (value <= danger) if lower_is_worse else (value >= danger)
@@ -134,7 +134,7 @@ class EFWS:
 
         self._critical_streak = 0
         self._stop_flag = threading.Event()
-        self._last_routine_send = 0.0  # 0.0 -> routine send pertama directly di siklus awal
+        self._last_routine_send = 0.0  # 0.0 -> routine send first directly in cycle early
 
         self._location = {
             "lat":    settings.DEVICE_LOCATION["lat"],
@@ -147,21 +147,21 @@ class EFWS:
                     settings.DEVICE_ID, settings.RUN_MODE,
                     self.sim.module.upper() if self.sim else "none")
 
-        # Separate thread khusus retry offline queue every
-        # EFWS_CONNECTIVITY_CHECK_SEC (2 minutes) -- SENGAJA independen from
-        # siklus read sensors (3 minutes), so that requirement "retry every
-        # 2 minutes" tetap terpenuhi persis walau read cycle lebih lambat.
+        # Separate thread specifically retry offline queue every
+        # EFWS_CONNECTIVITY_CHECK_SEC (2 minutes) -- INTENTIONALLY independent from
+        # cycle read sensors (3 minutes), so that requirement "retry every
+        # 2 minutes" still fulfilled exactly although read cycle more slow.
         self._flush_thread = threading.Thread(target=self._flush_queue_loop, daemon=True)
         self._flush_thread.start()
 
-        # Separate thread: auto-purge local data (SQLite) that lebih tua
-        # from EFWS_DB_RETENTION_DAYS (default 3 days), dicek every
-        # EFWS_DB_RETENTION_CHECK_SEC (default 6 hours) -- independen from
-        # siklus read sensors maupun retry offline queue.
+        # Separate thread: auto-purge local data (SQLite) that more old
+        # from EFWS_DB_RETENTION_DAYS (default 3 days), checked every
+        # EFWS_DB_RETENTION_CHECK_SEC (default 6 hours) -- independent from
+        # cycle read sensors or retry offline queue.
         self._retention_thread = threading.Thread(target=self._retention_loop, daemon=True)
         self._retention_thread.start()
 
-    # ─── Background: retry offline queue, independen from read cycle ──
+    # ─── Background: retry offline queue, independent from read cycle ──
     def _flush_queue_loop(self):
         interval = settings.EFWS_CONNECTIVITY_CHECK_SEC
         while not self._stop_flag.is_set():
@@ -171,7 +171,7 @@ class EFWS:
                 logger.error("Flush queue thread error:\n%s", traceback.format_exc())
             self._stop_flag.wait(interval)
 
-    # ─── Background: auto-delete local data lebih from N days (default 3) ──
+    # ─── Background: auto-delete local data more from N days (default 3) ──
     def _retention_loop(self):
         days = settings.DB_RETENTION_DAYS
         interval = settings.DB_RETENTION_CHECK_SEC
@@ -181,7 +181,7 @@ class EFWS:
                 if result["sensor_readings_deleted"] or result["api_queue_deleted"]:
                     logger.info(
                         "🧹 Retention: delete %d rows sensor_readings, %d rows api_queue "
-                        "(lebih tua from %d days).",
+                        "(more old from %d days).",
                         result["sensor_readings_deleted"],
                         result["api_queue_deleted"],
                         days,
@@ -193,17 +193,17 @@ class EFWS:
     # ─── GPS refresh ─────────────────────────────────────────────
     def _update_gps(self):
         if self.sim is None:
-            logger.warning("📍 SIM/GPS is not available -- use lokasi fallback from config (%s).",
+            logger.warning("📍 SIM/GPS is not available -- use location fallback from config (%s).",
                            self._location)
             return
 
         module_name = self.sim.module.upper() if hasattr(self.sim, "module") else "SIM"
-        logger.info("📡 Meminta data GPS from %s (port=%s)...",
+        logger.info("📡 Requesting data GPS from %s (port=%s)...",
                     module_name, getattr(self.sim, "port", "?"))
         try:
             result = self.sim.get_gps(timeout=settings._int("EFWS_GPS_TIMEOUT", 90))
         except Exception as e:
-            logger.warning("📍 GPS error from %s: %s -- lokasi TETAP use value sebelumnya/fallback.",
+            logger.warning("📍 GPS error from %s: %s -- location STILL use value previously/fallback.",
                            module_name, e)
             return
 
@@ -219,12 +219,12 @@ class EFWS:
                 "📍 GPS FIX NYATA from %s: lat=%.6f, lon=%.6f, alt=%sm%s",
                 module_name, result["lat"], result["lon"],
                 result.get("altitude_m"),
-                f" | mock=True (bukan hardware asli)" if result.get("_mock") else "",
+                f" | mock=True (not hardware original)" if result.get("_mock") else "",
             )
             if result.get("raw"):
                 logger.debug("📍 Raw +CGPSINFO from %s: %s", module_name, result["raw"])
         else:
-            logger.warning("📍 GPS from %s TIDAK fix (%s) -- lokasi that used/sent JATUH KE FALLBACK config.",
+            logger.warning("📍 GPS from %s NOT fix (%s) -- location that used/sent FALLS BACK TO FALLBACK config.",
                            module_name, result.get("reason"))
             self._location["fix"]    = False
             self._location["source"] = "fallback"
@@ -245,17 +245,17 @@ class EFWS:
 
         if failed:
             logger.warning(
-                "⚠️ Sensor TIDAK READABLE/EMPTY siklus ini (value=0/null): %s",
+                "⚠️ Sensor NOT READABLE/EMPTY cycle this (value=0/null): %s",
                 ", ".join(failed),
             )
 
         return data
 
-    # ─── Evaluate (single-tier: exceeded / not, sesuai kontrak API) ──
+    # ─── Evaluate (single-tier: exceeded / not, according to contract API) ──
     def _evaluate(self, data: dict):
         """
-        Threshold aktif = merge remote config (from response telemetry
-        terakhir) with hardcoded local, per-field (see threshold_resolver).
+        Threshold active = merge remote config (from response telemetry
+        latest) with hardcoded local, per-field (see threshold_resolver).
         Return: (any_triggered: bool, triggered: list[str])
         """
         t = resolve_active_thresholds(self.hardcoded_thresholds, self.api.remote_config)
@@ -273,7 +273,7 @@ class EFWS:
         triggered = [k for k, v in checks.items() if v]
         return (len(triggered) > 0), triggered
 
-    # ─── Payload builders (kontrak backend, endpoint 1/2/3/4) ────
+    # ─── Payload builders (contract backend, endpoint 1/2/3/4) ────
     def _build_location_payload(self) -> dict:
         return {
             "deviceId":    settings.DEVICE_ID,
@@ -286,7 +286,7 @@ class EFWS:
         soil     = data.get("soil", {})
         pressure = data.get("pressure", {})
         rain     = data.get("rain", {})
-        distance_m = data.get("jarak")
+        distance_m = data.get("distance")
 
         timestamp = (
             datetime.now(ZoneInfo("Asia/Jakarta"))
@@ -312,10 +312,10 @@ class EFWS:
         }
 
     def _build_heartbeat_payload(self, data) -> dict:
-        # NOTE: batteryLevel dulu diambil from sensor battery that sudah
-        # dihapus (not section from 3 sensor: pressure/soil/rain). If
-        # backend WAJIB terima batteryLevel numerik every heartbeat, kasih
-        # tau -- kita bisa tambah battery only buat keperluan heartbeat ini.
+        # NOTE: batteryLevel first obtained from sensor battery that already
+        # deleted (not section from 3 sensor: pressure/soil/rain). If
+        # backend REQUIRED receive batteryLevel numeric every heartbeat, kasih
+        # tau -- we can add battery only for purpose heartbeat this.
         return {
             "deviceId":     settings.DEVICE_ID,
             "deviceToken":  settings.DEVICE_TOKEN,
@@ -331,7 +331,7 @@ class EFWS:
             "error":       error,
         }
 
-    # ─── Alarm handler LOCAL (sirine real-time, independen from backend) ──
+    # ─── Alarm handler LOCAL (siren real-time, independent from backend) ──
     def _handle_alarm(self, any_triggered: bool, triggered: list):
         cfg      = self.hardcoded_thresholds.get("alarm", {})
         required = cfg.get("consecutive_readings_required", 3)
@@ -340,19 +340,19 @@ class EFWS:
         self.alarm.set_level("critical" if any_triggered else "normal")
 
         if any_triggered and self._critical_streak >= required:
-            logger.warning("🔴 ALARM (local, sirine active) — %d bacaan consecutive: %s",
+            logger.warning("🔴 ALARM (local, siren active) — %d readings consecutive: %s",
                            self._critical_streak, triggered)
 
-    # ─── Send bundel Location + Telemetry + Heartbeat ────────────
+    # ─── Send bundle Location + Telemetry + Heartbeat ────────────
     def _send_bundle(self, data, reason: str):
-        logger.warning("📡 KIRIM (%s) -- Location + Telemetry + Heartbeat", reason)
+        logger.warning("📡 SEND (%s) -- Location + Telemetry + Heartbeat", reason)
 
         location_payload  = self._build_location_payload()
         logger.info(
             "📍 Location that sent: lat=%s, lon=%s | source=%s (%s)",
             self._location.get("lat"), self._location.get("lon"),
             self._location.get("source"),
-            "GPS original" if self._location.get("source") == "gps" else "fallback config, BUKAN from GPS",
+            "GPS original" if self._location.get("source") == "gps" else "fallback config, NOT from GPS",
         )
         telemetry_payload = self._build_telemetry_payload(data)
         heartbeat_payload = self._build_heartbeat_payload(data)
@@ -368,14 +368,14 @@ class EFWS:
 
         pending = self.db.count_pending_queue()
         if pending:
-            logger.info("📦 %d item masih di offline queue (akan di-retry thread separate).", pending)
+            logger.info("📦 %d item still in offline queue (will in-retry thread separate).", pending)
 
-    # ─── Endpoint 4: eksekusi command from heartbeat, lalu ACK ───
+    # ─── Endpoint 4: execute command from heartbeat, then ACK ───
     def _process_commands(self, commands: list):
         for cmd in commands:
             command_id = cmd.get("id", "")
             command_name = cmd.get("command", "")
-            logger.warning("📥 Command diterima from backend: id=%s command=%s", command_id, command_name)
+            logger.warning("📥 Command received from backend: id=%s command=%s", command_id, command_name)
 
             handler = self._COMMAND_HANDLERS.get(command_name)
             if handler is None:
@@ -395,13 +395,13 @@ class EFWS:
 
     def _cmd_reboot(self):
         """
-        Spec minta "execute -> wait until complete -> new send ACK". For
-        command Reboot ini SECARA TEKNIS TIDAK MUNGKIN dipenuhi literal --
-        dispatch restart through proses child DETACHED with delay singkat,
-        ACK SUCCESS sent SEGERA oleh caller (_process_commands).
+        Spec request "execute -> wait until complete -> new send ACK". For
+        command Reboot this TECHNICALLY NOT POSSIBLE fulfilled literally --
+        dispatch restart through process child DETACHED with delay short,
+        ACK SUCCESS sent IMMEDIATELY by caller (_process_commands).
         """
         delay = settings.COMMAND_REBOOT_DELAY_SEC
-        logger.warning("🔄 Reboot dijadwalkan %ds lagi (after ACK sent)...", delay)
+        logger.warning("🔄 Reboot scheduled %ds again (after ACK sent)...", delay)
         subprocess.Popen(
             ["setsid", "bash", "-c", f"sleep {delay} && sudo -n systemctl restart efws.service"],
             stdout=subprocess.DEVNULL,
@@ -446,7 +446,7 @@ class EFWS:
                 else:
                     next_routine_in = int(settings.ROUTINE_SEND_INTERVAL_SEC - (now - self._last_routine_send))
                     logger.info(
-                        "READ | all values normal — not send (routine send next dalam %ds). "
+                        "READ | all values normal — not send (routine send next inside %ds). "
                         "water=%.2fm soil_surface=%.1f%% soil_deep=%.1f%% rain=%.1fmm",
                         next_routine_in,
                         data["pressure"].get("depth_m", 0) or 0,
@@ -458,7 +458,7 @@ class EFWS:
                 time.sleep(settings.SENSOR_READ_INTERVAL_SEC)
 
         except KeyboardInterrupt:
-            logger.info("EFWS dihentikan oleh user (Ctrl+C).")
+            logger.info("EFWS stopped by user (Ctrl+C).")
         except Exception:
             logger.critical("EFWS crash!\n%s", traceback.format_exc())
         finally:

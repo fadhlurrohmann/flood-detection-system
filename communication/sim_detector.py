@@ -1,21 +1,21 @@
 """
-SIM Auto-Detector — mendeteksi otomatis apakah node ini menggunakan
+SIM Auto-Detector — detecting automatically whether node this using
 module A7670E/SIM7670E (LTE Cat-1) or SIM7600 (LTE Cat-4/3G).
 
-Cara kerja:
+Methods kerja:
   1. Scan all port /dev/ttyUSBx that available.
-  2. Send AT command ke every port; if ada that merespons, check identitas
+  2. Send AT command to every port; if exists that responds, check identitas
      module through ATI (Product Identification Information).
   3. A7670E/SIM7670E → instantiasi class A7670E (command GNSS: AT+CGNSSPWR)
   4. SIM7600           → instantiasi class SIM7600 (command GNSS: AT+CGPS)
-  5. Result deteksi disimpan di .sim_cache (file text) sehingga boot next
-     directly ke port that correct without scan again.
+  5. Result deteksi stored in .sim_cache (file text) so boot next
+     directly to port that correct without scan again.
 
-Kenapa dua class separate (not satu unified)?
-  AT command for GNSS berbeda antara A7670E dan SIM7600, dan
-  mencampur keduanya dalam satu class akan mengorbankan kejelasan kode.
-  Auto-detector ini menjadi jembatan — callers di main.py not perlu tahu
-  module mana that used, because interface publiknya sama.
+Why two class separate (not one unified)?
+  AT command for GNSS different between A7670E and SIM7600, and
+  mixing both inside one class will sacrificing clarity code.
+  Auto-detector this become jembatan — callers in main.py not needs tahu
+  module which that used, because interface public interface is same.
 
 Usage:
   from communication.sim_detector import detect_sim, SimInterface
@@ -45,8 +45,8 @@ TIMEOUT    = 2
 
 
 # ─── ATI fingerprint → module ─────────────────────────────────────────────────
-# Kata kunci that muncul di respons ATI for masing-masing module.
-# Add variant lain if ada module SIMCom lain di project ini.
+# Word key that appears in response ATI for each module.
+# Add variant other if exists module SIMCom other in project this.
 _FINGERPRINTS = {
     "a7670e":  ["A7670E", "A7670", "SIM7670"],
     "sim7600": ["SIM7600", "SIM7600E", "SIM7600G"],
@@ -62,8 +62,8 @@ def _send_at(ser, cmd: str, wait: float = 1.0) -> str:
 
 def _identify_port(port: str) -> "str | None":
     """
-    Buka port, send AT, send ATI.
-    Return: "a7670e", "sim7600", or None (not dikenali / does not respond).
+    Open port, send AT, send ATI.
+    Return: "a7670e", "sim7600", or None (not recognized / does not respond).
     """
     if serial is None:
         raise RuntimeError("pyserial is not installed - pip install pyserial")
@@ -81,8 +81,8 @@ def _identify_port(port: str) -> "str | None":
             if any(kw.upper() in ati_resp for kw in keywords):
                 return module_key
 
-        # Merespons AT tapi ATI not cocok fingerprint — possibly module SIMCom lain
-        logger.warning("Port %s merespons AT tapi not dikenali from ATI: %s",
+        # Responds AT but ATI not cocok fingerprint — possibly module SIMCom other
+        logger.warning("Port %s responds AT but not recognized from ATI: %s",
                        port, ati_resp[:80])
         return None
 
@@ -107,10 +107,10 @@ def _identify_port(port: str) -> "str | None":
 
 def scan_ports() -> "dict | None":
     """
-    Scan all kandidat port serial, return dict {port, module} when ketemu,
-    or None if none that merespons.
+    Scan all kandidat port serial, return dict {port, module} when found,
+    or None if none responds.
     """
-    # Gabungkan with result glob so that dapat port that none di SCAN_PORTS
+    # Combine with result glob so that got port that none in SCAN_PORTS
     candidates = list(dict.fromkeys(
         SCAN_PORTS + sorted(glob.glob("/dev/ttyUSB*"))
     ))
@@ -119,24 +119,24 @@ def scan_ports() -> "dict | None":
     for port in candidates:
         if not os.path.exists(port):
             continue
-        logger.debug("  Mencoba %s ...", port)
+        logger.debug("  Trying %s ...", port)
         module = _identify_port(port)
         if module:
-            logger.info("  ✅ Module %s ditemukan di %s", module.upper(), port)
+            logger.info("  ✅ Module %s found in %s", module.upper(), port)
             return {"port": port, "module": module}
 
-    logger.warning("❌ None SIM module that detected di port manapun.")
+    logger.warning("❌ No SIM module that detected in port anywhere.")
     return None
 
 
 def _load_cache() -> "dict | None":
     try:
         data = json.loads(CACHE_FILE.read_text())
-        # Validasi port masih ada (bisa berubah after reboot)
+        # Validasi port still exists (can changes after reboot)
         if os.path.exists(data.get("port", "")):
             logger.info("📋 SIM cache: port=%s module=%s", data["port"], data["module"])
             return data
-        logger.info("Cache stale (port %s none), scan again...", data.get("port"))
+        logger.info("Cache stale (port %s is unavailable), scan again...", data.get("port"))
     except Exception:
         pass
     return None
@@ -187,7 +187,7 @@ def detect_sim(force_scan: bool = False) -> "SimInterface":
         info = None
 
     # ==========================
-    # SCAN ULANG
+    # SCAN AGAIN
     # ==========================
 
     if info is None:
@@ -199,7 +199,7 @@ def detect_sim(force_scan: bool = False) -> "SimInterface":
 
         else:
             raise RuntimeError(
-                "None SIM module that detected."
+                "No SIM module that detected."
             )
 
     return SimInterface(
@@ -210,8 +210,8 @@ def detect_sim(force_scan: bool = False) -> "SimInterface":
 
 class SimInterface:
     """
-    Wrapper unified di atas A7670E or SIM7600 — callers not perlu tahu
-    module mana that used, interface publiknya identik.
+    Wrapper unified above A7670E or SIM7600 — callers not needs tahu
+    module which that used, interface public interface is identical.
     """
 
     def __init__(self, port: str, module: str):
@@ -228,9 +228,9 @@ class SimInterface:
             from communication.sim7600_legacy import SIM7600
             return SIM7600(port=port, baudrate=BAUD)
         else:
-            raise ValueError(f"Module tidak dikenal: {module}")
+            raise ValueError(f"Module not recognized: {module}")
 
-    # ── Public API (sama for keduanya) ─────────────────────────
+    # ── Public API (same for both) ─────────────────────────
     def get_gps(self, timeout: int = None, interval: float = 3.0) -> dict:
         t = timeout if timeout is not None else settings.GPS_TIMEOUT
         return self._drv.get_gps(timeout=t, interval=interval)
@@ -255,7 +255,7 @@ class SimInterface:
 
 
 class MockSimInterface:
-    """Used when RUN_MODE=mock — not needs hardware apapun."""
+    """Used when RUN_MODE=mock — not needs hardware anything."""
     module = "mock"
     port   = "mock"
 

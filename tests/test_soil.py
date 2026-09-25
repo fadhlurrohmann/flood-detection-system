@@ -1,10 +1,10 @@
 """
-TEST — Soil Moisture Probe (dua probe: surface + deep)
+TEST — Soil Moisture Probe (two probe: surface + deep)
 
-Probe SURFACE (CH2): kedalaman 0-30cm — kondisi permukaan tanah
-Probe DEEP    (CH3): kedalaman 30-60cm — kelembaban dalam tanah
+Probe SURFACE (CH2): depth 0-30cm — condition surface soil
+Probe DEEP    (CH3): depth 30-60cm — humidity inside soil
 
-Evaluasi di EFWS mengambil value TERENDAH (terburuk) from keduanya.
+Evaluation in EFWS retrieving value TERENDAH (terburuk) from both.
 
 Usage: python3 tests/test_soil.py
 """
@@ -23,10 +23,10 @@ try:
 except Exception as e:
     print(f"[FAIL] {e}"); sys.exit(1)
 
-print("LANGKAH KALIBRASI per probe:")
-print("  1. Probe di UDARA KERING → catat 'raw' → itu dry_raw")
-print("  2. Probe TERENDAM AIR    → catat 'raw' → itu wet_raw")
-print("  Update value di sensors/soil.py SoilMoistureSensor.__init__\n")
+print("STEP CALIBRATION per probe:")
+print("  1. Probe in AIR KERING → record 'raw' → that dry_raw")
+print("  2. Probe SUBMERGED AIR    → record 'raw' → that wet_raw")
+print("  Update value in sensors/soil.py SoilMoistureSensor.__init__\n")
 
 print("Reading every 1 seconds (Ctrl+C for stop)...\n")
 try:

@@ -1,15 +1,15 @@
 """
-SIM7600 driver (LTE Cat-4 / 3G) — dipanggil oleh sim_detector.py
-ketika hardware SIM7600 detected di port serial.
+SIM7600 driver (LTE Cat-4 / 3G) — dipanggil by sim_detector.py
+when hardware SIM7600 detected in port serial.
 
 Perbedaan main from A7670E (a7670e.py):
   GPS power:  AT+CGPS=1  / AT+CGPS=0       (not AT+CGNSSPWR)
-  GPS query:  AT+CGPSINFO                   (sama)
-  Register:   AT+CREG? / AT+CSQ            (sama)
+  GPS query:  AT+CGPSINFO                   (same)
+  Register:   AT+CREG? / AT+CSQ            (same)
 
-Interface publik (get_gps, get_gps_location, signal_quality, dll) identik
-with A7670E sehingga SimInterface di sim_detector.py bisa panggil keduanya
-without tahu module mana that used.
+Interface publik (get_gps, get_gps_location, signal_quality, dll) identical
+with A7670E so SimInterface in sim_detector.py can panggil both
+without tahu module which that used.
 """
 import re
 import time
@@ -51,7 +51,7 @@ class SIM7600:
         return self.send_at("AT+CREG?")
 
     def gps_power_on(self) -> bool:
-        # SIM7600 use AT+CGPS=1 (berbeda from A7670E that use AT+CGNSSPWR=1)
+        # SIM7600 use AT+CGPS=1 (different from A7670E that use AT+CGNSSPWR=1)
         resp = self.send_at("AT+CGPS=1", wait=2.0)
         if "OK" in resp or "+CGPS:" in resp:
             self._gnss_on = True
@@ -100,7 +100,7 @@ class SIM7600:
     def get_gps(self, timeout: int = 90, interval: float = 3.0) -> dict:
         if not self._gnss_on:
             if not self.gps_power_on():
-                return {"fix": False, "reason": "GPS engine failed dinyalakan (SIM7600)"}
+                return {"fix": False, "reason": "GPS engine failed powered on (SIM7600)"}
 
         elapsed = 0.0
         while elapsed < timeout:

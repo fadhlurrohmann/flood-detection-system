@@ -10,7 +10,7 @@ except ImportError:
 
 class YFS201:
     def __init__(self, GPIO_YF=None):
-        # Use configuration GPIO_YF; 16 adalah fallback for wiring YF-S201.
+        # Use configuration GPIO_YF; 16 is fallback for wiring YF-S201.
         self.GPIO_YF = GPIO_YF if GPIO_YF is not None else getattr(settings, "GPIO_YF", 16)
         
         device_options = {
@@ -24,21 +24,21 @@ class YFS201:
         self.sensor = DigitalInputDevice(**device_options)
         self.pulse_count = 0
         
-        # Daftarkan fungsi callback interupsi
+        # Register function callback interrupt
         self.sensor.when_activated = self._count_pulse
 
     def _count_pulse(self):
         self.pulse_count += 1
 
     def read_flow_rate(self, duration: float = 1.0) -> float:
-        """Mengukur debit air dalam Liter/Minutes selama durasi sampling tertentu."""
+        """Measure flow rate air inside Liter/Minutes during duration sampling specific."""
         self.pulse_count = 0
         time.sleep(duration)
         
-        # Menghitung frekuensi Hz berdasarkan durasi sampling
+        # Calculate frequency Hz based on duration sampling
         hz = self.pulse_count / duration
         
-        # Rumus standar YF-S201: Frekuensi (Hz) / 7.5 = Liter/Minutes
+        # Rumus standar YF-S201: Frequency (Hz) / 7.5 = Liter/Minutes
         flow_rate = hz / 7.5
         return flow_rate
 

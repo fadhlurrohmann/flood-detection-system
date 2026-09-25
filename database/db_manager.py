@@ -1,19 +1,19 @@
 """
 SQLite local data logger for EFWS.
 
-Prinsip alur data:
-  read sensors → SAVE ke DB dulu (sensor_readings, sumber kebenaran local)
-              → coba send ke API
-              → failed (signal mati)? → enter queue (api_queue), payload
-                disimpan APA ADANYA (JSON persis) so that waktu di-flush
-                again nanti datanya not berubah sedikit pun
+Prinsip flow data:
+  read sensors → SAVE to DB first (sensor_readings, source of truth local)
+              → try send to API
+              → failed (signal off)? → enter queue (api_queue), payload
+                stored UNCHANGED (JSON exactly) so that time in-flush
+                again the data later not changes even slightly at all
               → EFWSPublisher check signal again every EFWS_CONNECTIVITY_CHECK_SEC
-                (default 2 minutes) lalu auto flush if sudah online lagi.
+                (default 2 minutes) then auto flush if already online again.
 
-TIDAK menyimpan alarm_level / triggered_by / threshold apa pun — evaluasi
-alarm & threshold sekarang murni tanggung jawab backend. Device only
-mengevaluasi status secara LOCAL (main.py) for menyalakan sirine secara
-real-time, without mempersistensikannya di sini.
+NOT storing alarm_level / triggered_by / threshold what at all — evaluation
+alarm & threshold now purely tanggung jawab backend. Device only
+evaluates status in a LOCAL (main.py) for activating siren in a
+real-time, without persisting it in here.
 """
 import sqlite3
 import json
@@ -33,23 +33,23 @@ class DBManager:
     def _init_tables(self):
         cur = self.conn.cursor()
 
-        # Tabel main: satu rows per read cycle, columns per sensor raw.
-        # None columns status/alarm/threshold — itu urusan backend.
+        # Tabel main: one rows per read cycle, columns per sensor raw.
+        # None columns status/alarm/threshold — that handled by backend.
         cur.execute("""
             CREATE TABLE IF NOT EXISTS sensor_readings (
                 id                INTEGER PRIMARY KEY AUTOINCREMENT,
                 timestamp         TEXT    NOT NULL,
                 device_id         TEXT    NOT NULL,
 
-                soil_surface_pct  REAL,
-                soil_deep_pct     REAL,
-                water_current_ma  REAL,
-                water_depth_m     REAL,
+                soil_surface_pct  ACTUAL,
+                soil_deep_pct     ACTUAL,
+                water_current_ma  ACTUAL,
+                water_depth_m     ACTUAL,
                 water_fault_open  INTEGER,
-                rainfall_mm       REAL,   -- accumulated rainfall since last reset/reading
-                rain_working_hrs  REAL,   -- sensor's cumulative operating time
+                rainfall_mm       ACTUAL,   -- accumulated rainfall since last reset/reading
+                rain_working_hrs  ACTUAL,   -- sensor's cumulative operating time
 
-                full_payload      TEXT    -- JSON PERSIS that sent ke API (for audit)
+                full_payload      TEXT    -- JSON EXACTLY that sent to API (for audit)
             )
         """)
 
@@ -74,11 +74,11 @@ class DBManager:
     # ─── Logging sensor readings ──────────────────────────────────
     def log_reading(self, data: dict, api_payload: dict) -> int:
         """
-        Save satu read cycle ke database BEFORE dicoba sent ke API.
+        Save one read cycle to database BEFORE is attempted sent to API.
         - data:        dict result EFWS._read_all() → {"soil":{"surface":{...},
                        "deep":{...}}, "pressure":{...}}
-        - api_payload: payload PERSIS that akan sent ke API, disimpan utuh
-                       di columns full_payload for audit/pembanding with content
+        - api_payload: payload EXACTLY that will sent to API, stored intact
+                       in columns full_payload for audit/pembanding with content
                        offline queue.
         Return: row id.
         """
@@ -112,7 +112,7 @@ class DBManager:
 
     # ─── API queue (offline buffer) ───────────────────────────────
     def queue_api(self, endpoint: str, payload: dict):
-        """Save payload ke offline queue APA ADANYA (not diubah/dihitung again)."""
+        """Save payload to offline queue UNCHANGED (not changed/calculated again)."""
         cur = self.conn.cursor()
         cur.execute("""
             INSERT INTO api_queue (timestamp, endpoint, payload)
@@ -125,7 +125,7 @@ class DBManager:
         self.conn.commit()
 
     def get_pending_queue(self, limit: int = 20) -> list:
-        """Get queue that belum sent (FIFO). Item failed >10x dilewati (dianggap stale)."""
+        """Get queue that not yet sent (FIFO). Item failed >10x exceeded (treated as stale)."""
         cur = self.conn.cursor()
         cur.execute("""
             SELECT id, endpoint, payload, attempts
@@ -170,19 +170,19 @@ class DBManager:
     # ─── Retention data (auto-cleanup) ──────────────────────────────
     def purge_old_data(self, days: int = 3) -> dict:
         """
-        Delete rows LAMA (lebih tua from `days` days) from local database.
-        Dipanggil otomatis oleh background thread (main.py:
-        EFWS._retention_loop), not menghapus file database-nya sendiri --
-        only rows old di dalamnya, so that data terbaru (<= `days` days)
-        tetap ada dan ukuran file not terus membengkak.
+        Delete rows OLD (more old from `days` days) from local database.
+        Dipanggil automatically by background thread (main.py:
+        EFWS._retention_loop), not deleting file database-nya its own --
+        only rows old in it, so that data newest (<= `days` days)
+        still exists and size file not continuously membengkak.
 
-        - sensor_readings : all rows lebih tua from cutoff dihapus.
-        - api_queue        : ONLY rows that statusnya sudah "complete"
-                              (sent=1, or attempts>=10 alias dianggap
-                              failed permanen) that dihapus. Item that masih
-                              aktif menunggu retry TIDAK dihapus meskipun
-                              usianya lebih from `days` days, so that not
-                              kehilangan data that belum sempat sent.
+        - sensor_readings : all rows more old from cutoff deleted.
+        - api_queue        : ONLY rows that whose status already "complete"
+                              (sent=1, or attempts>=10 alias treated as
+                              failed permanently) that deleted. Item that still
+                              active waiting retry NOT deleted even though
+                              its age more from `days` days, so that not
+                              losing data that has not yet been sent.
 
         Return: {"sensor_readings_deleted": int, "api_queue_deleted": int}
         """
@@ -200,7 +200,7 @@ class DBManager:
 
         self.conn.commit()
         if deleted_readings or deleted_queue:
-            self.conn.execute("VACUUM")  # kecilkan ukuran file .db after delete
+            self.conn.execute("VACUUM")  # reduce size file .db after delete
 
         return {
             "sensor_readings_deleted": deleted_readings,

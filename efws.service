@@ -4,16 +4,16 @@ After=network-online.target gsm-connect.service
 Requires=gsm-connect.service
 
 [Service]
-# ── Ganti path sesuai lokasi install di Raspberry Pi ──
-# Struktur project ini FLAT: main.py directly di root project
+# ── Replace path according to location install in Raspberry Pi ──
+# Structure project this FLAT: main.py directly in root project
 # (sejajar with venv/, .env, scripts/, logs/, database/)
 WorkingDirectory=/home/uwfadmin/ews
 ExecStart=/home/uwfadmin/ews/venv/bin/python main.py
 
 # ── Environment ───────────────────────────────────────
-# systemd reading file .env LANGSUNG - satu-satunya sumber kebenaran,
-# sama seperti when run manual through `python main.py`.
-# Tanda "-" di depan path berarti not failed if file belum ada.
+# systemd reading file .env DIRECTLY - only source of truth,
+# same like when run manual through `python main.py`.
+# Tanda "-" in depan path means not failed if file does not yet have.
 EnvironmentFile=-/home/uwfadmin/ews/.env
 
 # ── Restart policy ────────────────────────────────────
@@ -22,15 +22,15 @@ RestartSec=10
 StartLimitIntervalSec=120
 StartLimitBurst=5
 
-# ── Output ke journald (journalctl -u efws -f) ────────
+# ── Output to journald (journalctl -u efws -f) ────────
 StandardOutput=journal
 StandardError=journal
 SyslogIdentifier=efws
 
-# ── User (run sebagai user biasa, NOT root) ────
-# Ganti "pi" sesuai username Raspberry Pi Anda. User ini WAJIB ada di
-# grup gpio, spi, i2c, dialout so that bisa akses GPIO/SPI/I2C/serial port
-# without sudo (see docs/DEPLOYMENT.md langkah persiapan user).
+# ── User (run as user regular, NOT root) ────
+# Replace "pi" according to username Raspberry Pi You. User this REQUIRED exists in
+# group gpio, spi, i2c, dialout so that can access GPIO/SPI/I2C/serial port
+# without sudo (see docs/DEPLOYMENT.md step preparation user).
 User=uwfadmin
 Group=uwfadmin
 

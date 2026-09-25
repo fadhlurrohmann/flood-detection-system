@@ -31,16 +31,16 @@ class JSN_SR04T:
         signal.setitimer(signal.ITIMER_REAL, timeout)
         try:
             print(
-                f"Membaca JSN-SR04T: TRIG={self.trig}, ECHO={self.echo}",
+                f"Reading JSN-SR04T: TRIG={self.trig}, ECHO={self.echo}",
                 flush=True,
             )
             distance_m = self.sensor.distance
-            print(f"Data sensor diterima: {distance_m:.3f} m", flush=True)
+            print(f"Data sensor received: {distance_m:.3f} m", flush=True)
             return distance_m
 
         except TimeoutError:
             print(
-                f"Timeout: tidak ada echo dalam {timeout:.1f} detik "
+                f"Timeout: not exists echo inside {timeout:.1f} seconds "
                 f"(TRIG={self.trig}, ECHO={self.echo})",
                 flush=True,
             )

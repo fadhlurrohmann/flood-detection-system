@@ -1,10 +1,10 @@
 """
-Capacitive Soil Moisture Probe (waterproof) — dua probe: surface dan deep.
+Capacitive Soil Moisture Probe (waterproof) — two probe: surface and deep.
 
-  - soilMoistureSurface: probe di kedalaman 0–30 cm
-  - soilMoistureDeep:    probe di kedalaman 30–60 cm
+  - soilMoistureSurface: probe in depth 0–30 cm
+  - soilMoistureDeep:    probe in depth 30–60 cm
 
-Masing-masing probe memiliki value kalibrasi dry/wet sendiri.
+Each probe has value calibration dry/wet its own.
 """
 
 from config import settings
@@ -17,11 +17,11 @@ class SoilMoistureSensor:
         channel_surface=None,
         channel_deep=None,
 
-        # Kalibrasi Surface
+        # Calibration Surface
         dry_raw_surface=900,
         wet_raw_surface=380,
 
-        # Kalibrasi Deep
+        # Calibration Deep
         dry_raw_deep=920,
         wet_raw_deep=410,
     ):
@@ -50,10 +50,10 @@ class SoilMoistureSensor:
 
     def _raw_to_pct(self, raw: int, dry_raw: int, wet_raw: int) -> float:
         """
-        Mengubah value ADC menjadi persentase moisture.
+        Converting value ADC become persentase moisture.
         Probe kapasitif:
             raw high = dry
-            raw rendah = wet
+            raw low = wet
         """
 
         raw = max(min(raw, dry_raw), wet_raw)

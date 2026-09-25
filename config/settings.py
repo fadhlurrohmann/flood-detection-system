@@ -1,17 +1,17 @@
 """
 Global configuration for EFWS.
-All value sensitif dibaca from file .env (via python-dotenv).
-File .env TIDAK boleh di-commit ke git — see .env.example for templatenya.
+All value sensitive read from file .env (via python-dotenv).
+File .env NOT may in-commit to git — see .env.example for template.
 """
 import os
 from pathlib import Path
 from dotenv import load_dotenv
 
-# ─── Cari .env secara otomatis (naik folder sampai ketemu) ───────────────────
+# ─── Find .env in a automatically (up folder until found) ───────────────────
 def _find_and_load_dotenv():
     """
-    Cari file .env start from lokasi settings.py, naik ke atas sampai 2 level.
-    Ini so that not peduli seberapa dalam struktur folder project-nya.
+    Find file .env start from location settings.py, up to above until 2 level.
+    This so that not matter how inside structure folder project.
     """
     search_start = Path(__file__).resolve().parent  # start from config/
     for candidate in [search_start, *search_start.parents[:2]]:
@@ -19,8 +19,8 @@ def _find_and_load_dotenv():
         if env_file.exists():
             print(f"✅  Found .env at {env_file}, loading...")
             load_dotenv(env_file, override=True)
-            return candidate   # return root that ditemukan
-    # Not ketemu .env — load_dotenv tetap jalan (read from env var sistem saja)
+            return candidate   # return root that found
+    # Not found .env — load_dotenv still running (read from env var system only)
     print("❌  .env not found, using system environment variables only.")
     load_dotenv(override=True)
     return search_start
@@ -32,13 +32,13 @@ print("EFWS_API_URL =", os.getenv("EFWS_API_URL"))
 
 # ─── Helper ──────────────────────────────────────────────────────────────────
 def _req(key: str) -> str:
-    """Read env var wajib. Raise error jelas if none."""
+    """Read env var required. Raise error clear if none."""
     val = os.getenv(key)
     if not val:
         raise EnvironmentError(
-            f"\n\n  ❌  Environment variable '{key}' tidak ditemukan.\n"
-            f"      Pastikan file .env ada di root project dan sudah diisi.\n"
-            f"      Contoh: cp .env.example .env\n"
+            f"\n\n  ❌  Environment variable '{key}' not found.\n"
+            f"      Ensure file .env exists in root project and already filled in.\n"
+            f"      Example: cp .env.example .env\n"
         )
     return val
 
@@ -63,19 +63,19 @@ DEVICE_LOCATION = {
     "lon": _float("EFWS_LON", 0.0),
 }
 
-# ─── Mode operasi ────────────────────────────────────────────────────────────
+# ─── Mode operation ────────────────────────────────────────────────────────────
 RUN_MODE = _opt("EFWS_RUN_MODE", "hardware")
 
-# ─── I2C (BME280 — suhu/kelembaban/tekanan ambient, native I2C) ────────────
+# ─── I2C (BME280 — temperature/humidity/pressure ambient, native I2C) ────────────
 I2C_BUS        = _int("EFWS_I2C_BUS", 1)
 BME280_ADDRESS = int(_opt("EFWS_BME280_ADDR", "0x76"), 16)
 
-# ─── SPI / MCP3008 (ADC 8-channel, SATU Logic Level Converter) ─────────────
-# Versi hardware: 1x MCP3008, 1x LLC (min. 6-channel, mis. module 8-ch),
+# ─── SPI / MCP3008 (ADC 8-channel, ONE Logic Level Converter) ─────────────
+# Version hardware: 1x MCP3008, 1x LLC (min. 6-channel, mis. module 8-ch),
 # 2x soil probe, MQ-2, MQ-135, anemometer RS485 (directly USB, without LLC),
 # submersible pressure sensor (loop 4-20mA + burden resistor), module sensor
-# battery voltage DC 0-25V, dan modem 4G (A7670E OR SIM7600 — auto-detect,
-# only satu that dipasang).
+# battery voltage DC 0-25V, and modem 4G (A7670E OR SIM7600 — auto-detect,
+# only one that installed).
 #
 #   LLC (HV=5V, LV=3.3V) — all sensor analog 0-5V:
 #     HV-1 → LV-1 : Soil Surface AOUT                     → CH0
@@ -92,13 +92,13 @@ ADC_CHANNEL_SOIL_SURFACE    = _int("EFWS_ADC_SOIL_SURFACE",  0)   # LLC HV-0 (pr
 ADC_CHANNEL_WATER_FLOW       = _int("EFWS_ADC_WATER_FLOW",     1)   # LLC HV-1 (probe 30-60cm)
 ADC_CHANNEL_PRESSURE        = _int("EFWS_ADC_PRESSURE",      2)   # LLC HV-2 (pressure sensor via R_BURDEN)
 ADC_CHANNEL_BATTERY         = _int("EFWS_ADC_BATTERY",       3)   # LLC HV-3 (voltage sensor module OUT)
-# CH4-CH7 not dikabel — spare physical di MCP3008
+# CH4-CH7 not dikabel — spare physical in MCP3008
 
 # ─── Gravity Rainfall Sensor (DFRobot SEN0575) ─────────────────────────────
 I2C_BUS = 1
 # DFRobot SEN0575
 RAINFALL_I2C_ADDRESS = 0x1D
-# Interval pembacaan (seconds)
+# Interval reading (seconds)
 RAINFALL_READ_INTERVAL = 2
 
 # ─── Battery — Module Sensor Voltage DC 0-25V ────────────────────────────────
@@ -107,12 +107,12 @@ BATTERY_MAX_V        = _float("EFWS_BATTERY_MAX_V",        12.6)  # battery volt
 BATTERY_MIN_V        = _float("EFWS_BATTERY_MIN_V",         9.0)  # battery voltage empty (V)
 
 # ─── Submersible Pressure Sensor — loop 4-20mA ──────────────────────────────
-# Sensor loop-powered 2-kabel, dibaca via burden resistor presisi lalu LLC
-# (see sensors/pressure.py for detail kalkulasi & wiring).
+# Sensor loop-powered 2-cable, read via burden resistor presisi then LLC
+# (see sensors/pressure.py for details kalkulasi & wiring).
 PRESSURE_BURDEN_OHM = _float("EFWS_PRESSURE_BURDEN_OHM", 56.8)  # 4mA→1V, 20mA→5V
 PRESSURE_MIN_MA     = _float("EFWS_PRESSURE_MIN_MA",       4.0)
 PRESSURE_MAX_MA     = _float("EFWS_PRESSURE_MAX_MA",      20.0)
-PRESSURE_RANGE_M    = _float("EFWS_PRESSURE_RANGE_M",      3.0)  # rentang full sensor, sesuaikan datasheet
+PRESSURE_RANGE_M    = _float("EFWS_PRESSURE_RANGE_M",      3.0)  # range full sensor, adjust datasheet
 PRESSURE_ADC_REF_VOLTAGE = _float("EFWS_PRESSURE_ADC_REF_VOLTAGE",3.3)
 
 
@@ -134,10 +134,10 @@ APN              = _opt("EFWS_APN", "internet")
 
 # ─── REST API ────────────────────────────────────────────────────────────────
 API_BASE_URL       = _req("EFWS_API_URL")
-# CATATAN: endpoint URL SENGAJA not didefinisikan sebagai konstanta
-# module, tapi through fungsi dinamis di bawah, so that URL that berlaku when
-# runtime selalu memakai EFWS_API_URL terkini from env — termasuk if
-# .env diubah dan service di-restart. Ada 4 endpoint:
+# NOTE: endpoint URL INTENTIONALLY not defined as konstanta
+# module, but through function dinamis below, so that URL that berlaku when
+# runtime always using EFWS_API_URL terkini from env — including if
+# .env changed and service in-restart. Exists 4 endpoint:
 #   telemetry_endpoint()   -> /sensors/telemetry     (scheduled, bawa config remote)
 #   location_endpoint()    -> /sensors/location       (scheduled)
 #   heartbeat_endpoint()   -> /sensors/heartbeat      (scheduled, bawa commands)
@@ -147,7 +147,7 @@ def _base_url() -> str:
     return os.getenv("EFWS_API_URL", API_BASE_URL).rstrip("/")
 
 def telemetry_endpoint() -> str:
-    """Data sensor + smokeLevel dsb. Response-nya membawa 'config' (threshold remote)."""
+    """Data sensor + smokeLevel dsb. Response-nya carries 'config' (threshold remote)."""
     return _base_url() + "/sensors/telemetry"
 
 def location_endpoint() -> str:
@@ -155,11 +155,11 @@ def location_endpoint() -> str:
     return _base_url() + "/sensors/location"
 
 def heartbeat_endpoint() -> str:
-    """Health check + tempat backend menitipkan 'commands' (mis. Reboot)."""
+    """Health check + place backend provides 'commands' (mis. Reboot)."""
     return _base_url() + "/sensors/heartbeat"
 
 def command_ack_endpoint() -> str:
-    """ACK result eksekusi command that received through heartbeat. Event-driven, not scheduled."""
+    """ACK result execute command that received through heartbeat. Event-driven, not scheduled."""
     return _base_url() + "/sensors/commands/ack"
 
 API_SECRET_KEY     = _opt("EFWS_API_KEY", "")
@@ -171,11 +171,11 @@ API_RETRY_DELAY    = _int("EFWS_API_RETRY_DELAY", 5)
 # ─── Local database ──────────────────────────────────────────────────────────
 DB_PATH = _opt("EFWS_DB_PATH", str(_ROOT / "database" / "efws_data.db"))
 
-# Retention local data -- rows sensor_readings & api_queue (that statusnya
-# is complete: sent OR sudah discarded permanen) that lebih tua from
-# ini otomatis DIHAPUS oleh background thread (see main.py:
-# EFWS._retention_loop). Ini menghapus ROWS-ROWS old di dalam database,
-# NOT menghapus file database itu sendiri -- tabel & data terbaru tetap ada.
+# Retention local data -- rows sensor_readings & api_queue (that whose status
+# is complete: sent OR already discarded permanently) that more old from
+# this automatically DELETED by background thread (see main.py:
+# EFWS._retention_loop). This deleting ROWS-ROWS old in inside database,
+# NOT deleting file database that its own -- tabel & data newest still exists.
 DB_RETENTION_DAYS        = _int("EFWS_DB_RETENTION_DAYS", 3)
 DB_RETENTION_CHECK_SEC   = _int("EFWS_DB_RETENTION_CHECK_SEC", 6 * 3600)  # check every 6 hours
 
@@ -183,31 +183,31 @@ DB_RETENTION_CHECK_SEC   = _int("EFWS_DB_RETENTION_CHECK_SEC", 6 * 3600)  # chec
 LOG_PATH = _opt("EFWS_LOG_PATH", str(_ROOT / "logs" / "efws.log"))
 
 # ─── Timing ──────────────────────────────────────────────────────────────────
-# Siklus CHECK sensor -- selalu jalan every interval ini, murni evaluasi
-# threshold (cepat, demi deteksi emergency responsif). TIDAK selalu berarti
-# send data -- see ROUTINE_SEND_INTERVAL_SEC di bawah.
+# Cycle CHECK sensor -- always running every interval this, purely evaluation
+# threshold (fast, for deteksi emergency responsive). NOT always means
+# send data -- see ROUTINE_SEND_INTERVAL_SEC below.
 SENSOR_READ_INTERVAL_SEC = _int("EFWS_READ_INTERVAL", 180)
 
-# Siklus Routine send (location+telemetry+heartbeat) when kondisi NORMAL --
-# SENGAJA dipisah from SENSOR_READ_INTERVAL_SEC: threshold tetap dicek every
-# 3 minutes (respons cepat if emergency), tapi if all normal, device
-# cukup lapor ke backend every ROUTINE_SEND_INTERVAL_SEC (default 3600s /
-# 60 minutes) so that not terlihat mati/hilang without membanjiri API.
-# Begitu ada threshold that dilewati, send LANGSUNG when itu juga
-# ("emergency upload") without menunggu jadwal rutin ini, dan jadwal rutin
-# di-reset from titik itu (because backend new saja receiving laporan).
+# Cycle Routine send (location+telemetry+heartbeat) when condition NORMAL --
+# INTENTIONALLY separated from SENSOR_READ_INTERVAL_SEC: threshold still checked every
+# 3 minutes (response fast if emergency), but if all normal, device
+# enough report to backend every ROUTINE_SEND_INTERVAL_SEC (default 3600s /
+# 60 minutes) so that not appear off/lost without flooding API.
+# Once exists threshold that exceeded, send DIRECTLY when that also
+# ("emergency upload") without waiting schedule rutin this, and schedule rutin
+# in-reset from point that (because backend new only receiving laporan).
 ROUTINE_SEND_INTERVAL_SEC = _int("EFWS_ROUTINE_SEND_INTERVAL_SEC", 360)
 
-# Retry offline queue -- running di separate thread from siklus read sensors
-# (see main.py EFWS._flush_queue_loop), so that tetap every 2 minutes persis
-# walau read cycle sekarang 3 minutes.
+# Retry offline queue -- running in separate thread from cycle read sensors
+# (see main.py EFWS._flush_queue_loop), so that still every 2 minutes exactly
+# although read cycle now 3 minutes.
 EFWS_CONNECTIVITY_CHECK_SEC = _int("EFWS_CONNECTIVITY_CHECK_SEC", 120)
 
 # ─── Command executor (endpoint 4: /sensors/commands/ack) ──────────────────
 # Delay before correct-correct restart after command "Reboot" received.
-# Kenapa perlu delay: proses ini harus sempat SENDING ack SUCCESS dulu
-# before systemctl restart membunuh proses Python that sedang jalan.
-# See main.py: EFWS._cmd_reboot() for detail.
+# Why needs delay: process this must sempat SENDING ack SUCCESS first
+# before systemctl restart terminates process Python that medium running.
+# See main.py: EFWS._cmd_reboot() for details.
 COMMAND_REBOOT_DELAY_SEC = _int("EFWS_REBOOT_DELAY_SEC", 5)
 
 # ─── Threshold file ──────────────────────────────────────────────────────────

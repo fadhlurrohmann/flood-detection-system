@@ -1,10 +1,10 @@
 """
-TEST — Send all fixture JSON ke /sensors/telemetry for verifikasi.
+TEST — Send all fixture JSON to /sensors/telemetry for verify.
 
 Berguna for:
-  - Konfirmasi format payload received API/backend with correct
-  - See tampilan every skenario di webhook.site before hardware installed
-  - Check edge case smokeLevel without perlu real sensor
+  - Confirmation format payload received API/backend with correct
+  - See tampilan every skenario in webhook.site before hardware installed
+  - Check edge case smokeLevel without needs actual sensor
 
 Usage:
   python3 tests/test_json_fixtures.py
@@ -21,17 +21,17 @@ FIXTURES_DIR = os.path.join(os.path.dirname(__file__), "fixtures")
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--file",  default=None, help="Nama file fixture spesifik")
+    parser.add_argument("--file",  default=None, help="Name file fixture specific")
     parser.add_argument("--delay", type=float, default=0.3)
     args = parser.parse_args()
 
     print("=" * 60)
-    print("  TEST — POST Fixture JSON ke /sensors/telemetry")
+    print("  TEST — POST Fixture JSON to /sensors/telemetry")
     print("=" * 60)
     print(f"Target : {settings.telemetry_endpoint()}\n")
 
     if "webhook.site/xxxxxxxx" in settings.API_BASE_URL:
-        print("[FAIL] EFWS_API_URL masih placeholder di .env")
+        print("[FAIL] EFWS_API_URL still placeholder in .env")
         print("Content with URL from https://webhook.site or run tools/mock_api_server.py")
         sys.exit(1)
 
@@ -65,11 +65,11 @@ def main():
 
     api.close()
     print(f"\n{'='*60}")
-    print(f"Selesai: {ok_count}/{total} berhasil.")
+    print(f"Complete: {ok_count}/{total} successful.")
     if ok_count == total:
         print("✅ All fixture sent — check webhook.site/mock server.")
     else:
-        print("❌ Ada that failed — check connection dan EFWS_API_URL di .env.")
+        print("❌ Exists that failed — check connection and EFWS_API_URL in .env.")
 
 if __name__ == "__main__":
     main()

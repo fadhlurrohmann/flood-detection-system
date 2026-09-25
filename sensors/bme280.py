@@ -1,7 +1,7 @@
 """
 BME280 — Temperature / Humidity / Pressure ambient sensor (I2C).
-Used for deteksi kondisi ambient (suhu high + kelembaban low =
-risiko kebakaran meningkat). TIDAK through MCP3008/LLC — module ini I2C native.
+Used for deteksi condition ambient (temperature high + humidity low =
+risk fire increases). NOT through MCP3008/LLC — module this I2C native.
 
 Requires: pip install smbus2 RPi.bme280
 """

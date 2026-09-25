@@ -1,9 +1,9 @@
 """
-TEST — All sensor sekaligus (hardware, satu putaran read)
+TEST — All sensor simultaneously (hardware, one putaran read)
 
-Run PALING TERAKHIR after all test individual lulus.
-Mensimulasikan satu read cycle lengkap seperti that dilakukan main.py,
-termasuk kalkulasi smokeLevel from MQ-2 + MQ-135.
+Run MOST LATEST after all test individual PASSED.
+Simulates one read cycle complete like that performed main.py,
+including kalkulasi smokeLevel from MQ-2 + MQ-135.
 
 Usage: python3 tests/test_all_sensors.py
 """
@@ -18,7 +18,7 @@ def smoke(mq2, mq135):
     return round(min((n2 * settings.SMOKE_WEIGHT_MQ2 + n135 * settings.SMOKE_WEIGHT_MQ135) * 100, 100.0), 2)
 
 print("=" * 60)
-print("  TEST ALL SENSOR (hardware, satu putaran)")
+print("  TEST ALL SENSOR (hardware, one putaran)")
 print("=" * 60)
 
 TESTS = [
@@ -43,7 +43,7 @@ for name, mod_path, cls_name in TESTS:
         results[name] = "OK"
         sensor_data[name] = reading
     except Exception as e:
-        print(f"  → GAGAL: {e}")
+        print(f"  → FAILED: {e}")
         results[name] = "FAILED"
 
 # smokeLevel from MQ-2 + MQ-135
@@ -65,7 +65,7 @@ if "FAILED" in results.values():
     print("  - SPI: ls /dev/spidev*  (MQ-2/MQ-135/soil/pressure — all through MCP3008)")
     print("  - I2C: i2cdetect -y 1   (BME280)")
     print("  - USB: ls /dev/ttyUSB*  (anemometer RS485)")
-    print("  - Check docs/Pinout.md for wiring lengkap")
+    print("  - Check docs/Pinout.md for wiring complete")
     sys.exit(1)
 else:
     print("\n✅ All sensor OK. Ready run main.py.")

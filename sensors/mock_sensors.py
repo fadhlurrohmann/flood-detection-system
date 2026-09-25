@@ -1,9 +1,9 @@
 """
 Mock sensor layer for testing WITHOUT hardware.
-Menghasilkan data realistis with variasi random dan skenario danger scheduled,
-sehingga alarm logic, database, dan API publisher bisa diuji full di desktop/Pi.
+Generates data realistis with variasi random and skenario danger scheduled,
+so alarm logic, database, and API publisher can diuji full in desktop/Pi.
 
-Aktif when EFWS_RUN_MODE=mock (default).
+Active when EFWS_RUN_MODE=mock (default).
 """
 import math
 import random
@@ -12,17 +12,17 @@ import time
 
 # ─── Helper ──────────────────────────────────────────────────────
 def _jitter(value: float, pct: float = 0.05) -> float:
-    """Tambah noise random ±pct% ke value."""
+    """Add noise random ±pct% to value."""
     return round(value * (1 + random.uniform(-pct, pct)), 3)
 
 
 # ─── Base mock ────────────────────────────────────────────────────
 class _MockBase:
-    """All mock sensor turunan from sini; _scenario() bisa override."""
+    """All mock sensor derived from here; _scenario() can override."""
 
     def _scenario(self) -> str:
-        """Pilih skenario berdasarkan waktu (siklus 2 minutes for demo)."""
-        t = time.time() % 120          # siklus 120 seconds
+        """Select skenario based on time (cycle 2 minutes for demo)."""
+        t = time.time() % 120          # cycle 120 seconds
         if t < 80:
             return "normal"
         elif t < 100:
@@ -33,7 +33,7 @@ class _MockBase:
 
 # ─── Submersible Pressure Sensor (water level, loop 4-20mA) ──────
 class MockPressureWater(_MockBase):
-    MA_BASE = {"normal": 14.0, "warning": 7.0, "critical": 4.5}  # makin low = makin dangkal/empty
+    MA_BASE = {"normal": 14.0, "warning": 7.0, "critical": 4.5}  # increasingly low = increasingly shallow/empty
     RANGE_M = 5.0
 
     def read(self) -> dict:
@@ -77,7 +77,7 @@ class MockBattery(_MockBase):
 
 # ─── Mock Alarm (no GPIO) ────────────────────────────────────────
 class MockAlarmController:
-    """Cetak level alarm ke console; not sentuh GPIO."""
+    """Cetak level alarm to console; not sentuh GPIO."""
 
     LEVELS = {"none": "🟢", "warning": "🟡", "critical": "🔴"}
     current_level = "none"

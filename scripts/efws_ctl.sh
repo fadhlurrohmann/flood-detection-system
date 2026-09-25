@@ -1,18 +1,18 @@
 #!/usr/bin/env bash
 # ============================================================
-#  EFWS — Script kontrol proses (start/stop/restart/status/logs)
-#  Use ini for testing manual WITHOUT systemd (lebih cepat for
-#  iterasi sambil prototyping). For produksi, use systemd
+#  EFWS — Script control process (start/stop/restart/status/logs)
+#  Use this for testing manual WITHOUT systemd (more fast for
+#  iterasi sambil prototyping). For production, use systemd
 #  (efws.service) because auto-start when boot & auto-restart when crash.
 #
-#  Letakkan file ini di:  <root-project>/scripts/efws_ctl.sh
-#  Struktur project ini FLAT - main.py ada directly di root project
+#  Place file this in:  <root-project>/scripts/efws_ctl.sh
+#  Structure project this FLAT - main.py exists directly in root project
 #  (sejajar with folder venv/, .env, scripts/, run/).
 #
 #  Usage:
 #    ./scripts/efws_ctl.sh start
 #    ./scripts/efws_ctl.sh stop
-#    ./scripts/efws_ctl.sh restart      <- run every kali update kode
+#    ./scripts/efws_ctl.sh restart      <- run every time update code
 #    ./scripts/efws_ctl.sh status
 #    ./scripts/efws_ctl.sh logs
 # ============================================================
@@ -31,17 +31,17 @@ is_running() {
 
 start() {
     if is_running; then
-        echo "EFWS sudah running (PID $(cat "$PID_FILE"))."
+        echo "EFWS already running (PID $(cat "$PID_FILE"))."
         return 0
     fi
     if [ ! -x "$VENV_PYTHON" ]; then
-        echo "ERROR: venv python not found di $VENV_PYTHON"
-        echo "Run dulu: python3 -m venv venv && source venv/bin/activate && pip install -r requirements.txt"
+        echo "ERROR: venv python not found in $VENV_PYTHON"
+        echo "Run first: python3 -m venv venv && source venv/bin/activate && pip install -r requirements.txt"
         exit 1
     fi
     if [ ! -f "$PROJECT_ROOT/.env" ]; then
-        echo "ERROR: .env not found di $PROJECT_ROOT/.env"
-        echo "Run dulu: cp .env.example .env  lalu content EFWS_API_URL"
+        echo "ERROR: .env not found in $PROJECT_ROOT/.env"
+        echo "Run first: cp .env.example .env  then content EFWS_API_URL"
         exit 1
     fi
     echo "Starting EFWS..."
@@ -61,7 +61,7 @@ start() {
 
 stop() {
     if ! is_running; then
-        echo "EFWS not sedang running."
+        echo "EFWS not medium running."
         rm -f "$PID_FILE"
         return 0
     fi
@@ -73,7 +73,7 @@ stop() {
         sleep 1
     done
     if kill -0 "$PID" 2>/dev/null; then
-        echo "Belum berhenti, force kill..."
+        echo "Not yet stop, force kill..."
         kill -9 "$PID"
     fi
     rm -f "$PID_FILE"
@@ -81,7 +81,7 @@ stop() {
 }
 
 restart() {
-    echo "=== Restarting EFWS (use ini each kali update kode) ==="
+    echo "=== Restarting EFWS (use this each time update code) ==="
     stop
     sleep 1
     start
@@ -89,15 +89,15 @@ restart() {
 
 status() {
     if is_running; then
-        echo "EFWS sedang RUNNING (PID $(cat "$PID_FILE"))."
+        echo "EFWS medium RUNNING (PID $(cat "$PID_FILE"))."
         ps -p "$(cat "$PID_FILE")" -o pid,etime,%cpu,%mem,cmd 2>/dev/null
     else
-        echo "EFWS TIDAK running."
+        echo "EFWS NOT running."
     fi
 }
 
 logs() {
-    echo "Tail logs/efws.log (Ctrl+C for berhenti memantau - proses TETAP jalan):"
+    echo "Tail logs/efws.log (Ctrl+C for stop memantau - process STILL running):"
     tail -f "$PROJECT_ROOT/logs/efws.log"
 }
 

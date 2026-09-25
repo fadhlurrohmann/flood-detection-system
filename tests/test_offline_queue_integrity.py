@@ -1,22 +1,22 @@
 """
-TEST — Integritas offline queue (queue) when signal lost.
+TEST — Integrity offline queue (queue) when signal lost.
 
-Tujuan: memastikan payload that disimpan ke SQLite api_queue when API not
-reachable (signal 4G hilang / EFWS_API_URL not reachable) TIDAK berubah
-sedikit pun from payload original — baik when disimpan maupun when resent
-(flush) after signal restored. Ini penting because data sensor pada when
-kejadian (mis. level kritis) harus sampai ke server APA ADANYA, not
-direkonstruksi/dihitung again from value sensor that sudah berubah.
+Purpose: ensuring payload that stored to SQLite api_queue when API not
+reachable (signal 4G lost / EFWS_API_URL not reachable) NOT changes
+even slightly at all from payload original — either when stored or when resent
+(flush) after signal restored. This important because data sensor on when
+kejadian (mis. level kritis) must until to server UNCHANGED, not
+direkonstruksi/calculated again from value sensor that already changes.
 
-Cara kerja test:
-  1. Set EFWS_API_URL ke alamat that dijamin not reachable.
-  2. Send satu payload contoh through APIPublisher.send_telemetry() (harus failed
-     dan otomatis enter queue).
-  3. Get kembali item queue from DB, bandingkan byte-demi-byte (deep equality)
+Methods kerja test:
+  1. Set EFWS_API_URL to address that guaranteed not reachable.
+  2. Send one payload example through APIPublisher.send_telemetry() (must failed
+     and automatically enter queue).
+  3. Get again item queue from DB, compare byte-for-byte (deep equality)
      with payload original.
-  4. Simulasikan signal restored (online=True paksa) lalu flush_queue() dan
-     make sure payload that di-POST again (through monkeypatch _post_once) sama
-     persis with payload original.
+  4. Simulate signal restored (online=True force) then flush_queue() and
+     make sure payload that in-POST again (through monkeypatch _post_once) same
+     exactly with payload original.
 
 Usage: python3 tests/test_offline_queue_integrity.py
 """
@@ -48,7 +48,7 @@ SAMPLE_PAYLOAD = {
 
 def main():
     print("=" * 60)
-    print("  TEST — Integritas Offline Queue")
+    print("  TEST — Integrity Offline Queue")
     print("=" * 60)
 
     tmp_db = os.path.join(tempfile.gettempdir(), "efws_queue_integrity_test.db")
@@ -60,48 +60,48 @@ def main():
 
     failures = []
 
-    # 1) Simulasikan offline: send harus failed & otomatis enter queue
+    # 1) Simulate offline: send must failed & automatically enter queue
     ok = api.send_telemetry(SAMPLE_PAYLOAD, db=db)
     if ok:
-        failures.append("send_telemetry() harusnya failed (endpoint sengaja unreachable)")
+        failures.append("send_telemetry() should failed (endpoint intentionally unreachable)")
     else:
-        print("  ✅ send_telemetry() failed seperti diharapkan (signal lost)")
+        print("  ✅ send_telemetry() failed like expected (signal lost)")
 
     pending = db.get_pending_queue()
     if len(pending) != 1:
-        failures.append(f"Jumlah item queue harus 1, dapat {len(pending)}")
+        failures.append(f"Number item queue must 1, got {len(pending)}")
     else:
         queued = json.loads(pending[0]["payload"])
         if queued == SAMPLE_PAYLOAD:
-            print("  ✅ Payload di queue IDENTIK with payload original (deep equality)")
+            print("  ✅ Payload in queue IDENTICAL with payload original (deep equality)")
         else:
-            failures.append(f"Payload di queue BERUBAH dari aslinya!\n  asli : {SAMPLE_PAYLOAD}\n  queue: {queued}")
+            failures.append(f"Payload in queue CHANGED from original!\n  original : {SAMPLE_PAYLOAD}\n  queue: {queued}")
 
-    # 2) Simulasikan signal restored → flush_queue() harus resend payload
-    #    that SAMA PERSIS (not payload new/dihitung again)
+    # 2) Simulate signal restored → flush_queue() must resend payload
+    #    that SAME EXACTLY (not payload new/calculated again)
     sent_payloads = []
     original_post_once = api._post_once
 
     def fake_post_once(endpoint, body):
         sent_payloads.append(json.loads(body))
-        # _post_once sekarang return 4-tuple: (delivered, status_code, response_json, transient)
+        # _post_once now return 4-tuple: (delivered, status_code, response_json, transient)
         return True, 200, {"success": True}, False
 
     api._post_once = fake_post_once
-    api.online = True  # paksa anggap signal sudah kembali
+    api.online = True  # force assume signal already again
     api.flush_queue(db)
     api._post_once = original_post_once
 
     if len(sent_payloads) != 1:
-        failures.append(f"flush_queue() harus mengirim 1 payload, terkirim {len(sent_payloads)}")
+        failures.append(f"flush_queue() must send 1 payload, sent {len(sent_payloads)}")
     elif sent_payloads[0] != SAMPLE_PAYLOAD:
-        failures.append("Payload that di-flush ULANG not sama with payload original!")
+        failures.append("Payload that in-flush AGAIN not same with payload original!")
     else:
-        print("  ✅ Payload that di-flush again after signal restored IDENTIK with aslinya")
+        print("  ✅ Payload that in-flush again after signal restored IDENTICAL with original")
 
     remaining = db.count_pending_queue()
     if remaining != 0:
-        failures.append(f"Queue harus kosong setelah flush sukses, sisa {remaining}")
+        failures.append(f"Queue must empty after flush sukses, remaining {remaining}")
     else:
         print("  ✅ Queue empty after successfully flushed")
 
@@ -116,7 +116,7 @@ def main():
             print(f"   - {f}")
         sys.exit(1)
     else:
-        print("  ✅ All pengecekan integritas queue LULUS.")
+        print("  ✅ All checks integrity queue PASSED.")
 
 
 if __name__ == "__main__":

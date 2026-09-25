@@ -1,4 +1,4 @@
-# ─── Core (wajib) ────────────────────────────────────────────
+# ─── Core (required) ────────────────────────────────────────────
 requests>=2.31.0          # HTTP REST API publisher
 python-dotenv>=1.0.0      # load configuration from file .env
 
@@ -6,7 +6,7 @@ python-dotenv>=1.0.0      # load configuration from file .env
 smbus2>=0.4.2             # I2C bus (BME280)
 RPi.bme280>=0.2.4         # BME280 temp/hum/pressure
 spidev>=3.6               # SPI bus for MCP3008 (MQ-2, MQ-135, soil, pressure, battery)
-RPi.GPIO>=0.7.0           # GPIO (relay/sirine)
+RPi.GPIO>=0.7.0           # GPIO (relay/siren)
 gpiozero>=2.0.0           # GPIO abstraction (ultrasonic distance sensor)
 lgpio>=0.2.2.0           # GPIO backend for GPIO Zero on Raspberry Pi
 minimalmodbus>=2.1.0      # RS485 anemometer (Modbus RTU)
