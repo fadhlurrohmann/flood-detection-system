@@ -82,9 +82,9 @@ class PressureWaterSensor:
 
     # ------------------------------------------------------
 
-    def read_voltage(self):
+    def read_voltage(self, raw=None):
 
-        raw = self.read_raw()
+        raw = self.read_raw() if raw is None else raw
 
         voltage = raw / 1023.0 * self.adc_ref
 
@@ -92,9 +92,9 @@ class PressureWaterSensor:
 
     # ------------------------------------------------------
 
-    def read_current_ma(self):
+    def read_current_ma(self, voltage=None):
 
-        voltage = self.read_voltage()
+        voltage = self.read_voltage() if voltage is None else voltage
 
         current_ma = voltage / self.burden_ohm * 1000.0
 
@@ -102,9 +102,9 @@ class PressureWaterSensor:
 
     # ------------------------------------------------------
 
-    def read_depth_m(self):
+    def read_depth_m(self, current=None):
 
-        current = self.read_current_ma()
+        current = self.read_current_ma() if current is None else current
 
         percent = (
             current - self.min_ma
@@ -124,9 +124,9 @@ class PressureWaterSensor:
 
     # ------------------------------------------------------
 
-    def read_pressure_bar(self):
+    def read_pressure_bar(self, depth=None):
 
-        depth = self.read_depth_m()
+        depth = self.read_depth_m() if depth is None else depth
 
         pressure = depth * 0.0980665
 
@@ -141,13 +141,13 @@ class PressureWaterSensor:
 
         raw = self.read_raw()
 
-        voltage = self.read_voltage()
+        voltage = self.read_voltage(raw)
 
-        current = self.read_current_ma()
+        current = self.read_current_ma(voltage)
 
-        depth = self.read_depth_m()
+        depth = self.read_depth_m(current)
 
-        pressure = self.read_pressure_bar()
+        pressure = self.read_pressure_bar(depth)
 
         fault = current < 3.8
 
