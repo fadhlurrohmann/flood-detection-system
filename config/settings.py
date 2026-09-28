@@ -109,7 +109,7 @@ BATTERY_MIN_V        = _float("EFWS_BATTERY_MIN_V",         9.0)  # battery volt
 # ─── Submersible Pressure Sensor — loop 4-20mA ──────────────────────────────
 # Sensor loop-powered 2-cable, read via burden resistor presisi then LLC
 # (see sensors/pressure.py for details kalkulasi & wiring).
-PRESSURE_BURDEN_OHM = _float("EFWS_PRESSURE_BURDEN_OHM", 56.8)  # 4mA→1V, 20mA→5V
+PRESSURE_BURDEN_OHM = _float("EFWS_PRESSURE_BURDEN_OHM", 100)  # 4mA→0.4V, 20mA→2V
 PRESSURE_MIN_MA     = _float("EFWS_PRESSURE_MIN_MA",       4.0)
 PRESSURE_MAX_MA     = _float("EFWS_PRESSURE_MAX_MA",      20.0)
 PRESSURE_RANGE_M    = _float("EFWS_PRESSURE_RANGE_M",      3.0)  # range full sensor, adjust datasheet
