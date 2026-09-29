@@ -18,6 +18,7 @@ real-time, without persisting it in here.
 import sqlite3
 import json
 import os
+import threading
 from datetime import datetime, timezone, timedelta
 from config import settings
 
@@ -25,17 +26,19 @@ from config import settings
 class DBManager:
     def __init__(self, db_path: str = settings.DB_PATH):
         os.makedirs(os.path.dirname(db_path) or ".", exist_ok=True)
+        self._lock = threading.RLock()
         self.conn = sqlite3.connect(db_path, check_same_thread=False)
         self.conn.row_factory = sqlite3.Row
         self._init_tables()
 
     # ─── Schema ──────────────────────────────────────────────────
     def _init_tables(self):
-        cur = self.conn.cursor()
+        with self._lock:
+            cur = self.conn.cursor()
 
         # Tabel main: one rows per read cycle, columns per sensor raw.
         # None columns status/alarm/threshold — that handled by backend.
-        cur.execute("""
+            cur.execute("""
             CREATE TABLE IF NOT EXISTS sensor_readings (
                 id                INTEGER PRIMARY KEY AUTOINCREMENT,
                 timestamp         TEXT    NOT NULL,
@@ -54,7 +57,7 @@ class DBManager:
         """)
 
         # Queue API delivery that failed (offline buffer)
-        cur.execute("""
+            cur.execute("""
             CREATE TABLE IF NOT EXISTS api_queue (
                 id          INTEGER PRIMARY KEY AUTOINCREMENT,
                 timestamp   TEXT    NOT NULL,
@@ -66,10 +69,10 @@ class DBManager:
             )
         """)
 
-        cur.execute("CREATE INDEX IF NOT EXISTS idx_readings_ts ON sensor_readings(timestamp)")
-        cur.execute("CREATE INDEX IF NOT EXISTS idx_queue_sent  ON api_queue(sent)")
+            cur.execute("CREATE INDEX IF NOT EXISTS idx_readings_ts ON sensor_readings(timestamp)")
+            cur.execute("CREATE INDEX IF NOT EXISTS idx_queue_sent  ON api_queue(sent)")
 
-        self.conn.commit()
+            self.conn.commit()
 
     # ─── Logging sensor readings ──────────────────────────────────
     def log_reading(self, data: dict, api_payload: dict) -> int:
@@ -86,8 +89,9 @@ class DBManager:
         pressure = data.get("pressure", {})
         rain = data.get("rain", {})
 
-        cur = self.conn.cursor()
-        cur.execute("""
+        with self._lock:
+            cur = self.conn.cursor()
+            cur.execute("""
             INSERT INTO sensor_readings (
                 timestamp, device_id,
                 soil_surface_pct, soil_deep_pct,
@@ -104,17 +108,18 @@ class DBManager:
             soil.get("deep", {}).get("moisture_percent"),
             pressure.get("current_ma"), pressure.get("depth_m"),
             int(bool(pressure.get("fault_open_loop", False))),
-            rain.get("rainfall_mm"), rain.get("working_time_hr"),
+            rain.get("rainfall_mm"), rain.get("working_time_hours"),
             json.dumps(api_payload, default=str),
         ))
-        self.conn.commit()
-        return cur.lastrowid
+            self.conn.commit()
+            return cur.lastrowid
 
     # ─── API queue (offline buffer) ───────────────────────────────
     def queue_api(self, endpoint: str, payload: dict):
         """Save payload to offline queue UNCHANGED (not changed/calculated again)."""
-        cur = self.conn.cursor()
-        cur.execute("""
+        with self._lock:
+            cur = self.conn.cursor()
+            cur.execute("""
             INSERT INTO api_queue (timestamp, endpoint, payload)
             VALUES (?, ?, ?)
         """, (
@@ -122,50 +127,56 @@ class DBManager:
             endpoint,
             json.dumps(payload, default=str),
         ))
-        self.conn.commit()
+            self.conn.commit()
 
     def get_pending_queue(self, limit: int = 20) -> list:
         """Get queue that not yet sent (FIFO). Item failed >10x exceeded (treated as stale)."""
-        cur = self.conn.cursor()
-        cur.execute("""
+        with self._lock:
+            cur = self.conn.cursor()
+            cur.execute("""
             SELECT id, endpoint, payload, attempts
             FROM   api_queue
             WHERE  sent = 0 AND attempts < 10
             ORDER  BY id ASC
             LIMIT  ?
         """, (limit,))
-        return [dict(r) for r in cur.fetchall()]
+            return [dict(r) for r in cur.fetchall()]
 
     def count_pending_queue(self) -> int:
-        cur = self.conn.cursor()
-        cur.execute("SELECT COUNT(*) FROM api_queue WHERE sent=0 AND attempts < 10")
-        return cur.fetchone()[0]
+        with self._lock:
+            cur = self.conn.cursor()
+            cur.execute("SELECT COUNT(*) FROM api_queue WHERE sent=0 AND attempts < 10")
+            return cur.fetchone()[0]
 
     def mark_queue_sent(self, queue_id: int):
-        self.conn.execute("UPDATE api_queue SET sent=1 WHERE id=?", (queue_id,))
-        self.conn.commit()
+        with self._lock:
+            self.conn.execute("UPDATE api_queue SET sent=1 WHERE id=?", (queue_id,))
+            self.conn.commit()
 
     def mark_queue_failed(self, queue_id: int, error: str):
-        self.conn.execute(
-            "UPDATE api_queue SET attempts=attempts+1, last_error=? WHERE id=?",
-            (error, queue_id)
-        )
-        self.conn.commit()
+        with self._lock:
+            self.conn.execute(
+                "UPDATE api_queue SET attempts=attempts+1, last_error=? WHERE id=?",
+                (error, queue_id)
+            )
+            self.conn.commit()
 
     # ─── Query helpers ────────────────────────────────────────────
     def recent_readings(self, limit: int = 20) -> list:
-        cur = self.conn.cursor()
-        cur.execute("""
+        with self._lock:
+            cur = self.conn.cursor()
+            cur.execute("""
             SELECT id, timestamp,
                    soil_surface_pct, soil_deep_pct,
                    water_depth_m, water_fault_open
             FROM   sensor_readings
             ORDER  BY id DESC LIMIT ?
         """, (limit,))
-        return [dict(r) for r in cur.fetchall()]
+            return [dict(r) for r in cur.fetchall()]
 
     def close(self):
-        self.conn.close()
+        with self._lock:
+            self.conn.close()
 
     # ─── Retention data (auto-cleanup) ──────────────────────────────
     def purge_old_data(self, days: int = 3) -> dict:
@@ -187,20 +198,21 @@ class DBManager:
         Return: {"sensor_readings_deleted": int, "api_queue_deleted": int}
         """
         cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
-        cur = self.conn.cursor()
+        with self._lock:
+            cur = self.conn.cursor()
 
-        cur.execute("DELETE FROM sensor_readings WHERE timestamp < ?", (cutoff,))
-        deleted_readings = cur.rowcount
+            cur.execute("DELETE FROM sensor_readings WHERE timestamp < ?", (cutoff,))
+            deleted_readings = cur.rowcount
 
-        cur.execute(
-            "DELETE FROM api_queue WHERE timestamp < ? AND (sent = 1 OR attempts >= 10)",
-            (cutoff,),
-        )
-        deleted_queue = cur.rowcount
+            cur.execute(
+                "DELETE FROM api_queue WHERE timestamp < ? AND (sent = 1 OR attempts >= 10)",
+                (cutoff,),
+            )
+            deleted_queue = cur.rowcount
 
-        self.conn.commit()
-        if deleted_readings or deleted_queue:
-            self.conn.execute("VACUUM")  # reduce size file .db after delete
+            self.conn.commit()
+            if deleted_readings or deleted_queue:
+                self.conn.execute("VACUUM")  # reduce size file .db after delete
 
         return {
             "sensor_readings_deleted": deleted_readings,

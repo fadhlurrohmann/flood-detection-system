@@ -15,6 +15,7 @@ NEW ARCHITECTURE (see full explanation in chat before file this was created):
     independent from cycle read sensors (3 minutes).
 """
 import json
+import sys
 import time
 import logging
 import threading
@@ -22,7 +23,11 @@ import subprocess
 import traceback
 from pathlib import Path
 from datetime import datetime, timezone
-from zoneinfo import ZoneInfo
+
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+if hasattr(sys.stderr, "reconfigure"):
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 
 from config import settings
 from config.threshold_resolver import resolve_active_thresholds
@@ -286,10 +291,11 @@ class EFWS:
         soil     = data.get("soil", {})
         pressure = data.get("pressure", {})
         rain     = data.get("rain", {})
-        distance_m = data.get("distance")
+        distance_value = data.get("distance")
+        distance_m = distance_value if isinstance(distance_value, (int, float)) else None
 
         timestamp = (
-            datetime.now(ZoneInfo("Asia/Jakarta"))
+            datetime.now(timezone.utc)
             .strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3]
             + "Z"
         )
@@ -423,6 +429,7 @@ class EFWS:
             settings.ROUTINE_SEND_INTERVAL_SEC,
             settings.EFWS_CONNECTIVITY_CHECK_SEC,
         )
+        completed_cycles = 0
         try:
             while True:
                 data = self._read_all()
@@ -455,14 +462,22 @@ class EFWS:
                         data["rain"].get("rainfall_mm", 0) or 0,
                     )
 
+                completed_cycles += 1
+                if settings.MAX_CYCLES and completed_cycles >= settings.MAX_CYCLES:
+                    logger.info("Completed %d configured cycle(s); stopping.", completed_cycles)
+                    break
+
                 time.sleep(settings.SENSOR_READ_INTERVAL_SEC)
 
         except KeyboardInterrupt:
             logger.info("EFWS stopped by user (Ctrl+C).")
         except Exception:
             logger.critical("EFWS crash!\n%s", traceback.format_exc())
+            raise
         finally:
             self._stop_flag.set()
+            self._flush_thread.join(timeout=6)
+            self._retention_thread.join(timeout=6)
             self.alarm.silence()
             for sensor in self.sensors.values():
                 close = getattr(sensor, "close", None)

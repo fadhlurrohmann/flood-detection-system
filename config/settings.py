@@ -17,13 +17,13 @@ def _find_and_load_dotenv():
     for candidate in [search_start, *search_start.parents[:2]]:
         env_file = candidate / ".env"
         if env_file.exists():
-            print(f"✅  Found .env at {env_file}, loading...")
+            print(f"[OK] Found .env at {env_file}, loading...")
             load_dotenv(env_file, override=True)
             return candidate   # return root that found
     # Not found .env — load_dotenv still running (read from env var system only)
-    print("❌  .env not found, using system environment variables only.")
+    print("[INFO] .env not found; using defaults and system environment variables.")
     load_dotenv(override=True)
-    return search_start
+    return search_start.parent
 
 _ROOT = _find_and_load_dotenv()
 print("ROOT :", _ROOT)
@@ -64,7 +64,9 @@ DEVICE_LOCATION = {
 }
 
 # ─── Mode operation ────────────────────────────────────────────────────────────
-RUN_MODE = _opt("EFWS_RUN_MODE", "hardware")
+RUN_MODE = _opt("EFWS_RUN_MODE", "mock").strip().lower()
+if RUN_MODE not in {"mock", "hardware"}:
+    raise ValueError("EFWS_RUN_MODE must be either 'mock' or 'hardware'")
 
 # ─── I2C (BME280 — temperature/humidity/pressure ambient, native I2C) ────────────
 I2C_BUS        = _int("EFWS_I2C_BUS", 1)
@@ -89,7 +91,9 @@ SPI_MAX_SPEED_HZ = _int("EFWS_SPI_SPEED", 1350000)
 MCP3008_VREF     = _float("EFWS_MCP3008_VREF", 3.3)
 
 ADC_CHANNEL_SOIL_SURFACE    = _int("EFWS_ADC_SOIL_SURFACE",  0)   # LLC HV-0 (probe 0-30cm)
-ADC_CHANNEL_WATER_FLOW       = _int("EFWS_ADC_WATER_FLOW",     1)   # LLC HV-1 (probe 30-60cm)
+ADC_CHANNEL_SOIL_DEEP       = _int("EFWS_ADC_SOIL_DEEP",     1)   # LLC HV-1 (probe 30-60cm)
+# Compatibility for older deployments that used this incorrect setting name.
+ADC_CHANNEL_WATER_FLOW      = _int("EFWS_ADC_WATER_FLOW", ADC_CHANNEL_SOIL_DEEP)
 ADC_CHANNEL_PRESSURE        = _int("EFWS_ADC_PRESSURE",      2)   # LLC HV-2 (pressure sensor via R_BURDEN)
 ADC_CHANNEL_BATTERY         = _int("EFWS_ADC_BATTERY",       3)   # LLC HV-3 (voltage sensor module OUT)
 # CH4-CH7 not dikabel — spare physical in MCP3008
@@ -121,11 +125,11 @@ GPIO_STATUS_LED   = _int("EFWS_GPIO_LED",    23)
 
 
 #-------- JSN-SR04T----------
-GPIO_JSN_TRIG = _int("EWF_JSN_TRIG", 22)
-GPIO_JSN_ECHO = _int("EWF_JSN_ECHO", 18)
+GPIO_JSN_TRIG = _int("EFWS_GPIO_JSN_TRIG", _int("EWF_JSN_TRIG", 22))
+GPIO_JSN_ECHO = _int("EFWS_GPIO_JSN_ECHO", _int("EWF_JSN_ECHO", 18))
 
 #------- YF-S201-------------
-GPIO_YF = _int("EWF_GPIO_YF", 16)
+GPIO_YF = _int("EFWS_GPIO_YF", _int("EWF_GPIO_YF", 16))
 
 # ─── A7670E / SIM7670E 4G LTE Cat-1 ──────────────────────────────────────────────────────────
 A7670E_AT_PORT  = _opt("EFWS_SIM_PORT", "/dev/ttyUSB2")
@@ -133,7 +137,7 @@ A7670E_BAUDRATE = _int("EFWS_A7670E_BAUD", 115200)
 APN              = _opt("EFWS_APN", "internet")
 
 # ─── REST API ────────────────────────────────────────────────────────────────
-API_BASE_URL       = _req("EFWS_API_URL")
+API_BASE_URL = _opt("EFWS_API_URL", "http://127.0.0.1:5000/api/v1/efws")
 # NOTE: endpoint URL INTENTIONALLY not defined as konstanta
 # module, but through function dinamis below, so that URL that berlaku when
 # runtime always using EFWS_API_URL terkini from env — including if
@@ -187,6 +191,8 @@ LOG_PATH = _opt("EFWS_LOG_PATH", str(_ROOT / "logs" / "efws.log"))
 # threshold (fast, for deteksi emergency responsive). NOT always means
 # send data -- see ROUTINE_SEND_INTERVAL_SEC below.
 SENSOR_READ_INTERVAL_SEC = _int("EFWS_READ_INTERVAL", 180)
+# Set to a positive number for smoke tests or one-shot runs. Zero runs forever.
+MAX_CYCLES = _int("EFWS_MAX_CYCLES", 0)
 
 # Cycle Routine send (location+telemetry+heartbeat) when condition NORMAL --
 # INTENTIONALLY separated from SENSOR_READ_INTERVAL_SEC: threshold still checked every

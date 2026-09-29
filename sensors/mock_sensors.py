@@ -64,6 +64,24 @@ class MockSoilMoisture(_MockBase):
             "deep":    {"raw": int(900 - deep_pct    / 100 * 520), "moisture_percent": round(deep_pct,    2), "_mock": True},
         }
 
+
+# ─── Rainfall ────────────────────────────────────────────────────
+class MockRainfall(_MockBase):
+    RAINFALL_BASE = {"normal": 0.2, "warning": 12.0, "critical": 35.0}
+
+    def read(self) -> dict:
+        scenario = self._scenario()
+        rainfall_mm = max(0.0, _jitter(self.RAINFALL_BASE[scenario], 0.08))
+        return {
+            "rainfall_mm": round(rainfall_mm, 3),
+            "rainfall_last_hour_mm": round(rainfall_mm, 3),
+            "rainfall_total_mm": round(rainfall_mm * 4, 3),
+            "tip_counter": int(rainfall_mm / 0.2794),
+            "working_time_hours": 24.0,
+            "_mock": True,
+            "_scenario": scenario,
+        }
+
 # ─── Battery — Module Sensor Voltage DC 0-25V ────────────────────
 class MockBattery(_MockBase):
     PCT_BASE = {"normal": 85.0, "warning": 42.0, "critical": 15.0}

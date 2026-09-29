@@ -3,7 +3,7 @@ TEST — Submersible Pressure Sensor (water level, loop 4-20mA via burden resist
 
 Check first before run:
   ls /dev/spidev*  → must exists /dev/spidev0.0
-  R_BURDEN 250Ω installed in loop, tap-nya to LLC HV-5 → LV-5 → MCP3008 CH4
+  R_BURDEN 100Ω installed in the loop and connected directly to MCP3008 CH2
   PSU loop 12-24V already active (sensor this loop-powered, NOT from Pi/buck 5V)
 
 That checked:

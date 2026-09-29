@@ -57,16 +57,12 @@ class MCP3008:
         if not 0 <= channel <= 7:
             raise ValueError("MCP3008 channel must 0-7")
         cmd = [1, (8 + channel) << 4, 0]
-        resp = self.spi.xfzer2(cmd)
+        resp = self.spi.xfer2(cmd)
         value = ((resp[1] & 3) << 8) + resp[2]
         return value
-    
-'''TODO: Check the MCP3008 and pressure sensor datasheets.
- The pressure sensor outputs 0.4-2.0 V, so it uses only part of the
- MCP3008's 0-1023 raw ADC range. Add a separate function to convert
-the raw ADC reading into the corresponding pressure value.'''
 
     def read_voltage(self, channel: int) -> float:
+        """Convert a raw 10-bit reading to the voltage present at the ADC pin."""
         raw = self.read_raw(channel)
         return round(raw / 1023.0 * self.vref, 4)
 

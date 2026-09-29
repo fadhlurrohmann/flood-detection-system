@@ -50,7 +50,7 @@ class RainfallSensor:
     ############################################################
 
     def _read(self, register, length):
-
+        last_error = None
         for attempt in range(3):
 
             try:
@@ -69,16 +69,17 @@ class RainfallSensor:
 
                 return list(read)
 
-            except OSError:
-
+            except OSError as error:
+                last_error = error
                 time.sleep(0.05)
 
-        raise
+        raise OSError(f"Failed to read rainfall register 0x{register:02X}") from last_error
 
     def _write(self, register, data):
         if isinstance(data, int):
             data = [data]
 
+        last_error = None
         for attempt in range(3):
             try:
                 msg = smbus2.i2c_msg.write(
@@ -90,10 +91,11 @@ class RainfallSensor:
                 time.sleep(0.10)
                 return
 
-            except OSError:
+            except OSError as error:
+                last_error = error
                 time.sleep(0.05)
 
-        raise
+        raise OSError(f"Failed to write rainfall register 0x{register:02X}") from last_error
 
     ############################################################
     # DEVICE
@@ -236,6 +238,7 @@ class RainfallSensor:
 
     def read(self):
 
+        rainfall_last_hour = round(self.window_rainfall(), 4)
         return {
 
             "rainfall_total_mm": round(
@@ -243,10 +246,9 @@ class RainfallSensor:
                 4
             ),
 
-            "rainfall_last_hour_mm": round(
-                self.window_rainfall(),
-                4
-            ),
+            "rainfall_mm": rainfall_last_hour,
+
+            "rainfall_last_hour_mm": rainfall_last_hour,
 
             "tip_counter": self.raw_tip_count(),
 
