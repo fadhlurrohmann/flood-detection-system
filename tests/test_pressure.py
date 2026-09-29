@@ -54,7 +54,7 @@ except KeyboardInterrupt:
     sys.exit(0)
 
 print("\n" + "=" * 60)
-print("  RINGKASAN")
+print("  SUMMARY ")
 print("=" * 60)
 
 problems = []

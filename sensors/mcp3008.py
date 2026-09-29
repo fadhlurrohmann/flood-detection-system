@@ -60,6 +60,11 @@ class MCP3008:
         resp = self.spi.xfzer2(cmd)
         value = ((resp[1] & 3) << 8) + resp[2]
         return value
+    
+'''TODO: Check the MCP3008 and pressure sensor datasheets.
+ The pressure sensor outputs 0.4-2.0 V, so it uses only part of the
+ MCP3008's 0-1023 raw ADC range. Add a separate function to convert
+the raw ADC reading into the corresponding pressure value.'''
 
     def read_voltage(self, channel: int) -> float:
         raw = self.read_raw(channel)
