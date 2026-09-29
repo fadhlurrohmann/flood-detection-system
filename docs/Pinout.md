@@ -146,21 +146,17 @@ from sensor other: needs **burden resistor** presisi for converting loop current
 become voltage that can read ADC.
 
 ```
-PSU 12-24V (+) ──────────► Sensor Loop V+
+PSU 12-24V (+) ──────────► +Sensor Loop V-
                                   │
-                    Sensor (variabel 4-20mA according to pressure/depth)
+                    Sensor (variable 4-20mA according to pressure/depth)
                                   │
                                   ▼
                     ┌─────────────────────────┐
-                    │  R_BURDEN = 250Ω 0.1%   │
+                    │  R_BURDEN = 100Ω 0.1%   │
                     │  (presisi, low-drift)   │
                     └────────────┬────────────┘
                                  │ tap in point this →  0-5V
                                  ▼
-                      LLC HV-5 (5V side)
-                                 │ level shift
-                      LLC LV-5 (3.3V side)
-                                 │
                        MCP3008 CH4
                                  │
 PSU 12-24V (−) ──────────► GND together (After R_BURDEN)
@@ -169,13 +165,13 @@ PSU 12-24V (−) ──────────► GND together (After R_BURDEN)
 | Point | Connect to |
 |-------|-----------|
 | Loop V+ | PSU 12-24V (+) — **not** from Pi/buck converter 5V |
-| Loop exit (After sensor) | End above R_BURDEN (250Ω, 0.1%) |
+| Loop exit (After sensor) | End above R_BURDEN (100Ω, 0.1%) |
 | End bottom R_BURDEN | GND together & PSU (−) |
 | Sensor/R_BURDEN junction | LLC **HV-5** → LV-5 → MCP3008 **CH4** |
 
-**Why 250Ω exactly?**
-- 4mA × 250Ω = **1.0V** → level "empty" (0m)
-- 20mA × 250Ω = **5.0V** → level "full" (`PRESSURE_RANGE_M`, default 5m — adjust datasheet sensor You)
+**Why 100Ω exactly?**
+- 4mA × 100Ω = **0.4V** → level "empty" (0m)
+- 20mA × 100Ω = **2.0V** → level "full" (`PRESSURE_RANGE_M`, default 5m — adjust datasheet sensor You)
 
 Formula konversi exists in `sensors/pressure.py`. **Adjust** `EFWS_PRESSURE_RANGE_M`
 in `.env` with range depth/pressure physical sensor You (many variants: 0-5m,
