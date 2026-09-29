@@ -1,10 +1,7 @@
 """
-TEST — Send all fixture JSON to /sensors/telemetry for verify.
+Send all telemetry fixtures to the configured API.
 
-Berguna for:
-  - Confirmation format payload received API/backend with correct
-  - See tampilan every skenario in webhook.site before hardware installed
-  - Check edge case smokeLevel without needs actual sensor
+Useful for validating payload handling before physical hardware is installed.
 
 Usage:
   python3 tests/test_json_fixtures.py
@@ -21,12 +18,12 @@ FIXTURES_DIR = os.path.join(os.path.dirname(__file__), "fixtures")
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--file",  default=None, help="Name file fixture specific")
+    parser.add_argument("--file", default=None, help="Send only this fixture file")
     parser.add_argument("--delay", type=float, default=0.3)
     args = parser.parse_args()
 
     print("=" * 60)
-    print("  TEST — POST Fixture JSON to /sensors/telemetry")
+    print("  TEST - POST Fixture JSON to /sensors/telemetry")
     print("=" * 60)
     print(f"Target : {settings.telemetry_endpoint()}\n")
 
@@ -49,27 +46,29 @@ def main():
             data = json.load(f)
 
         items = data if isinstance(data, list) else [data]
-        print(f"\n[{filename}] {len(items)} payload → /sensors/telemetry")
+        print(f"\n[{filename}] {len(items)} payload -> /sensors/telemetry")
 
         for i, item in enumerate(items, 1):
             t     = item.get("telemetry", [{}])[0]
-            sl    = t.get("smokeLevel", "?")
-            wl    = t.get("waterLevel", "?")
-            edge  = f"  [{t.get('_edgeCase','')}]" if "_edgeCase" in t else ""
+            water = t.get("waterLevel", "?")
+            rain = t.get("rainfallMm", "?")
+            edge = f"  [{t.get('_edgeCase', '')}]" if "_edgeCase" in t else ""
             total += 1
 
             ok = api.send_telemetry(item)
             ok_count += ok
-            print(f"  [{'OK  ' if ok else 'FAIL'}] #{i:02d}  smoke={sl}%  water={wl}m{edge}")
+            print(f"  [{'OK  ' if ok else 'FAIL'}] #{i:02d}  water={water}m  rain={rain}mm{edge}")
             time.sleep(args.delay)
 
     api.close()
     print(f"\n{'='*60}")
     print(f"Complete: {ok_count}/{total} successful.")
     if ok_count == total:
-        print("✅ All fixture sent — check webhook.site/mock server.")
+        print("[OK] All fixture sent - check webhook.site/mock server.")
     else:
-        print("❌ Exists that failed — check connection and EFWS_API_URL in .env.")
+        print("One or more requests failed. Check connectivity and EFWS_API_URL.")
+        return 1
+    return 0
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

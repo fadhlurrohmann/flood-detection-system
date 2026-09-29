@@ -1,5 +1,5 @@
 """
-Mock API server local (stdlib only, without Flask) - simulasi webhook.site
+Local mock API server (standard library only, without Flask).
 for testing without internet/connection 4G first.
 
 Usage: python3 tools/mock_api_server.py

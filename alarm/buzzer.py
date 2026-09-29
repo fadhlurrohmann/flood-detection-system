@@ -1,14 +1,16 @@
-"""
-Active buzzer driver - direct GPIO control for short audible warnings
-(separate from the 12V siren, used for the lower "warning" tier).
-"""
+"""Optional active-buzzer driver for installations that add one."""
 import time
-import RPi.GPIO as GPIO
-from config import settings
+
+try:
+    import RPi.GPIO as GPIO
+except ImportError:
+    GPIO = None
 
 
 class Buzzer:
-    def __init__(self, pin=settings.GPIO_BUZZER):
+    def __init__(self, pin=22):
+        if GPIO is None:
+            raise RuntimeError("RPi.GPIO is required to use the optional buzzer")
         self.pin = pin
         GPIO.setmode(GPIO.BCM)
         GPIO.setup(self.pin, GPIO.OUT)

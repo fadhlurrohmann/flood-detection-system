@@ -50,8 +50,8 @@ class SoilMoistureSensor:
 
     def _raw_to_pct(self, raw: int, dry_raw: int, wet_raw: int) -> float:
         """
-        Converting value ADC become persentase moisture.
-        Probe kapasitif:
+        Convert an ADC value to a moisture percentage.
+        Capacitive probe behavior:
             raw high = dry
             raw low = wet
         """

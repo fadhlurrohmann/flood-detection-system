@@ -465,8 +465,8 @@ if __name__ == "__main__":
 #     finally:
 #         ser.close()
 
-#     # ─── Ringkasan ───────────────────────────────────────────────
-#     header(f"RINGKASAN: {passed}/{total} test PASSED")
+#     # ─── Summary ─────────────────────────────────────────────────
+#     header(f"SUMMARY: {passed}/{total} tests PASSED")
 #     if passed == total:
 #         print("  All test PASSED. Module ready used.\n")
 #     elif passed >= total - 1:

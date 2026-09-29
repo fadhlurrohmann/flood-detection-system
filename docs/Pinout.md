@@ -71,7 +71,7 @@ python3 tests/test_bme280.py
 | CS/SHDN (pin 10) | GPIO8 (CE0) | |
 | DGND (pin 9)  | GND together | |
 | CH0-CH5 | see tabel channel below | All through LLC |
-| CH6-CH7 | Spare, NOT dikabel | |
+| CH6-CH7 | Spare, not wired | |
 
 Verify: `ls /dev/spidev*` → must appear `/dev/spidev0.0`
 
@@ -80,7 +80,7 @@ Verify: `ls /dev/spidev*` → must appear `/dev/spidev0.0`
 ## 4. Peta Channel MCP3008 — ONE Logic Level Converter
 
 All signal analog 0-5V **required** through LLC before enter MCP3008 (VREF 3.3V).
-Use module LLC minimal 6-channel bidirectional (mis. module 8-channel TXS0108E —
+Use a bidirectional LLC with at least six channels (for example, an 8-channel TXS0108E;
 more commonly sold and leaves 2 channels for expansion).
 
 | LLC | Side HV (5V) ← from sensor | Side LV (3.3V) → to MCP3008 | Channel |
@@ -141,7 +141,7 @@ LLC:
 
 ### Submersible Pressure Sensor — loop 4-20mA (Water level)
 
-Sensor this **loop-powered 2-cable** (not 0-5V directly), therefore wiring-nya differs from
+This sensor uses a **two-wire current loop** (not a direct 0-5V output), so its wiring differs from
 from sensor other: needs **burden resistor** presisi for converting loop current
 become voltage that can read ADC.
 
@@ -171,7 +171,7 @@ PSU 12-24V (−) ──────────► GND together (After R_BURDEN)
 | Loop V+ | PSU 12-24V (+) — **not** from Pi/buck converter 5V |
 | Loop exit (After sensor) | End above R_BURDEN (250Ω, 0.1%) |
 | End bottom R_BURDEN | GND together & PSU (−) |
-| Point sambung sensor/R_BURDEN | LLC **HV-5** → LV-5 → MCP3008 **CH4** |
+| Sensor/R_BURDEN junction | LLC **HV-5** → LV-5 → MCP3008 **CH4** |
 
 **Why 250Ω exactly?**
 - 4mA × 250Ω = **1.0V** → level "empty" (0m)
@@ -180,7 +180,7 @@ PSU 12-24V (−) ──────────► GND together (After R_BURDEN)
 Formula konversi exists in `sensors/pressure.py`. **Adjust** `EFWS_PRESSURE_RANGE_M`
 in `.env` with range depth/pressure physical sensor You (many variants: 0-5m,
 0-10m, 0-20m). Payload API sending two value from sensor this: `waterLevel` (meter)
-and `waterLevelCurrentMa` (loop current raw, berguna for backend detecting loop
+and `waterLevelCurrentMa` (raw loop current, useful for detecting loop
 disconnected — value suddenly falls back to ~0mA means cable disconnected, not air empty).
 
 ### Module Sensor Voltage DC 0-25V (battery)

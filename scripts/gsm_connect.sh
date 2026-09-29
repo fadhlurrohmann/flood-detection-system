@@ -16,8 +16,8 @@
 #      below) -- this INTENTIONALLY retained same like version old,
 #      so that efws.service (that using Requires=gsm-connect.service)
 #      still start although GSM failed total, and EFWS can running use
-#      offline queue / WiFi backup. That changes not exit code-nya,
-#      but WHETHER GSM correct-correct connect or not now tercatat
+#      offline queue / Wi-Fi backup. This does not change the exit code,
+#      but whether GSM actually connects is now recorded
 #      clear in journal (journalctl -u gsm-connect).
 # =============================================================================
 
@@ -175,7 +175,7 @@ fi
 
 # -----------------------------------------------------------------------
 # STEP 3: Connect GSM with retry, and VERIFY the result actual --
-# not only "nmcli exit 0" but correct-correct check default route through
+# do not rely only on an nmcli exit code; verify that the default route uses
 # interface modem. This also section that lost in version old.
 # -----------------------------------------------------------------------
 GSM_CONNECTED=false
@@ -225,8 +225,8 @@ log INFO "Done."
 # with version old, according to dependency `efws.service` that use
 # `Requires=gsm-connect.service`. If script this exit non-zero, systemd
 # will MEMBLOKIR efws.service at all -- although EFWS has
-# offline-queue and still berguna running local although without internet.
+# offline queue and remains useful locally even without internet.
 # That differs from version old: now status success/failed GSM
-# TERCATAT CLEAR in journal, not again dibungkam by `|| true`.
+# The failure is clearly recorded in the journal instead of hidden by `|| true`.
 # =============================================================================
 exit 0

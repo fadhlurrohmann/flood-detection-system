@@ -73,7 +73,7 @@ I2C_BUS        = _int("EFWS_I2C_BUS", 1)
 BME280_ADDRESS = int(_opt("EFWS_BME280_ADDR", "0x76"), 16)
 
 # ─── SPI / MCP3008 (ADC 8-channel, ONE Logic Level Converter) ─────────────
-# Version hardware: 1x MCP3008, 1x LLC (min. 6-channel, mis. module 8-ch),
+# Hardware version: 1x MCP3008, 1x LLC (at least 6 channels, such as an 8-channel module),
 # 2x soil probe, MQ-2, MQ-135, anemometer RS485 (directly USB, without LLC),
 # submersible pressure sensor (loop 4-20mA + burden resistor), module sensor
 # battery voltage DC 0-25V, and modem 4G (A7670E OR SIM7600 — auto-detect,
@@ -84,7 +84,7 @@ BME280_ADDRESS = int(_opt("EFWS_BME280_ADDR", "0x76"), 16)
 #     HV-2 → LV-2 : Soil Deep    AOUT                     → CH1
 #     HV-3 → LV-3 : Pressure sensor (through R_BURDEN)      → CH2
 #     HV-4 → LV-4 : Voltage Sensor Module OUT             → CH3
-#     HV-5..8 / CH4-CH7 : spare, not dikabel
+#     HV-5..8 / CH4-CH7 : spare, not wired
 SPI_BUS          = _int("EFWS_SPI_BUS", 0)
 SPI_DEVICE       = _int("EFWS_SPI_DEVICE", 0)
 SPI_MAX_SPEED_HZ = _int("EFWS_SPI_SPEED", 1350000)
@@ -96,7 +96,7 @@ ADC_CHANNEL_SOIL_DEEP       = _int("EFWS_ADC_SOIL_DEEP",     1)   # LLC HV-1 (pr
 ADC_CHANNEL_WATER_FLOW      = _int("EFWS_ADC_WATER_FLOW", ADC_CHANNEL_SOIL_DEEP)
 ADC_CHANNEL_PRESSURE        = _int("EFWS_ADC_PRESSURE",      2)   # LLC HV-2 (pressure sensor via R_BURDEN)
 ADC_CHANNEL_BATTERY         = _int("EFWS_ADC_BATTERY",       3)   # LLC HV-3 (voltage sensor module OUT)
-# CH4-CH7 not dikabel — spare physical in MCP3008
+# CH4-CH7 are not wired and remain spare MCP3008 channels.
 
 # ─── Gravity Rainfall Sensor (DFRobot SEN0575) ─────────────────────────────
 I2C_BUS = 1
@@ -112,7 +112,7 @@ BATTERY_MIN_V        = _float("EFWS_BATTERY_MIN_V",         9.0)  # battery volt
 
 # ─── Submersible Pressure Sensor — loop 4-20mA ──────────────────────────────
 # Sensor loop-powered 2-cable, read via burden resistor presisi then LLC
-# (see sensors/pressure.py for details kalkulasi & wiring).
+# (see sensors/pressure.py for calculation and wiring details).
 PRESSURE_BURDEN_OHM = _float("EFWS_PRESSURE_BURDEN_OHM", 100)  # 4mA→0.4V, 20mA→2V
 PRESSURE_MIN_MA     = _float("EFWS_PRESSURE_MIN_MA",       4.0)
 PRESSURE_MAX_MA     = _float("EFWS_PRESSURE_MAX_MA",      20.0)
@@ -136,12 +136,16 @@ A7670E_AT_PORT  = _opt("EFWS_SIM_PORT", "/dev/ttyUSB2")
 A7670E_BAUDRATE = _int("EFWS_A7670E_BAUD", 115200)
 APN              = _opt("EFWS_APN", "internet")
 
+# Compatibility names used by the direct SIM7600 driver.
+SIM7600_AT_PORT = _opt("EFWS_SIM7600_PORT", A7670E_AT_PORT)
+SIM7600_BAUDRATE = _int("EFWS_SIM7600_BAUD", A7670E_BAUDRATE)
+GPS_TIMEOUT = _int("EFWS_GPS_TIMEOUT", 90)
+
 # ─── REST API ────────────────────────────────────────────────────────────────
 API_BASE_URL = _opt("EFWS_API_URL", "http://127.0.0.1:5000/api/v1/efws")
-# NOTE: endpoint URL INTENTIONALLY not defined as konstanta
-# module, but through function dinamis below, so that URL that berlaku when
-# runtime always using EFWS_API_URL terkini from env — including if
-# .env changed and service in-restart. Exists 4 endpoint:
+# Endpoint URLs are intentionally resolved through the functions below instead
+# of module constants. This ensures runtime calls use the latest EFWS_API_URL,
+# including after the .env file changes and the service restarts. Four endpoints exist:
 #   telemetry_endpoint()   -> /sensors/telemetry     (scheduled, bawa config remote)
 #   location_endpoint()    -> /sensors/location       (scheduled)
 #   heartbeat_endpoint()   -> /sensors/heartbeat      (scheduled, bawa commands)
@@ -151,7 +155,7 @@ def _base_url() -> str:
     return os.getenv("EFWS_API_URL", API_BASE_URL).rstrip("/")
 
 def telemetry_endpoint() -> str:
-    """Data sensor + smokeLevel dsb. Response-nya carries 'config' (threshold remote)."""
+    """Sensor telemetry endpoint; its response may contain remote threshold config."""
     return _base_url() + "/sensors/telemetry"
 
 def location_endpoint() -> str:
@@ -159,7 +163,7 @@ def location_endpoint() -> str:
     return _base_url() + "/sensors/location"
 
 def heartbeat_endpoint() -> str:
-    """Health check + place backend provides 'commands' (mis. Reboot)."""
+    """Health endpoint where the backend may provide commands such as Reboot."""
     return _base_url() + "/sensors/heartbeat"
 
 def command_ack_endpoint() -> str:
@@ -201,7 +205,7 @@ MAX_CYCLES = _int("EFWS_MAX_CYCLES", 0)
 # 60 minutes) so that not appear off/lost without flooding API.
 # Once exists threshold that exceeded, send DIRECTLY when that also
 # ("emergency upload") without waiting schedule rutin this, and schedule rutin
-# in-reset from point that (because backend new only receiving laporan).
+# is reset from that point because the backend has just received a report.
 ROUTINE_SEND_INTERVAL_SEC = _int("EFWS_ROUTINE_SEND_INTERVAL_SEC", 360)
 
 # Retry offline queue -- running in separate thread from cycle read sensors
@@ -210,7 +214,7 @@ ROUTINE_SEND_INTERVAL_SEC = _int("EFWS_ROUTINE_SEND_INTERVAL_SEC", 360)
 EFWS_CONNECTIVITY_CHECK_SEC = _int("EFWS_CONNECTIVITY_CHECK_SEC", 120)
 
 # ─── Command executor (endpoint 4: /sensors/commands/ack) ──────────────────
-# Delay before correct-correct restart after command "Reboot" received.
+# Delay before restarting after a "Reboot" command is received.
 # Why needs delay: process this must sempat SENDING ack SUCCESS first
 # before systemctl restart terminates process Python that medium running.
 # See main.py: EFWS._cmd_reboot() for details.

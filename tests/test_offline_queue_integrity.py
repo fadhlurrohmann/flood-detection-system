@@ -1,22 +1,15 @@
 """
-TEST — Integrity offline queue (queue) when signal lost.
+TEST - Offline queue integrity during signal loss.
 
-Purpose: ensuring payload that stored to SQLite api_queue when API not
-reachable (signal 4G lost / EFWS_API_URL not reachable) NOT changes
-even slightly at all from payload original — either when stored or when resent
-(flush) after signal restored. This important because data sensor on when
-kejadian (mis. level kritis) must until to server UNCHANGED, not
-direkonstruksi/calculated again from value sensor that already changes.
+This verifies that a payload stored in SQLite while the API is unreachable is
+identical when later resent. A critical event must reach the server unchanged
+rather than being reconstructed from newer sensor readings.
 
-Methods kerja test:
-  1. Set EFWS_API_URL to address that guaranteed not reachable.
-  2. Send one payload example through APIPublisher.send_telemetry() (must failed
-     and automatically enter queue).
-  3. Get again item queue from DB, compare byte-for-byte (deep equality)
-     with payload original.
-  4. Simulate signal restored (online=True force) then flush_queue() and
-     make sure payload that in-POST again (through monkeypatch _post_once) same
-     exactly with payload original.
+Method:
+  1. Set EFWS_API_URL to a guaranteed unreachable address.
+  2. Send a payload; it must fail and enter the queue automatically.
+  3. Read it from the queue and compare it with the original payload.
+  4. Simulate restored connectivity, flush the queue, and compare the resent body.
 
 Usage: python3 tests/test_offline_queue_integrity.py
 """
@@ -33,22 +26,17 @@ SAMPLE_PAYLOAD = {
     "deviceToken": "test",
     "telemetry": [{
         "timestamp":            "2026-07-07T00:00:00.000Z",
-        "waterLevel":           2.1,
-        "waterLevelCurrentMa":  12.4,
-        "smokeLevel":           43.2,
-        "temp":                 42.5,
-        "humidity":             67.1,
-        "soilMoisture":         12.7,
-        "batteryLevel":         85.0,
-        "flameDetected":        False,
-        "windSpeed":            3.4,
+        "waterLevel": 2.1,
+        "distanceM": 0.82,
+        "soilMoisture": {"surface": 42.5, "deep": 48.0},
+        "rainfallMm": 3.4,
     }]
 }
 
 
 def main():
     print("=" * 60)
-    print("  TEST — Integrity Offline Queue")
+    print("  TEST - Integrity Offline Queue")
     print("=" * 60)
 
     tmp_db = os.path.join(tempfile.gettempdir(), "efws_queue_integrity_test.db")
@@ -63,21 +51,21 @@ def main():
     # 1) Simulate offline: send must failed & automatically enter queue
     ok = api.send_telemetry(SAMPLE_PAYLOAD, db=db)
     if ok:
-        failures.append("send_telemetry() should failed (endpoint intentionally unreachable)")
+        failures.append("send_telemetry() should fail because the endpoint is unreachable")
     else:
-        print("  ✅ send_telemetry() failed like expected (signal lost)")
+        print("  [OK] send_telemetry() failed like expected (signal lost)")
 
     pending = db.get_pending_queue()
     if len(pending) != 1:
-        failures.append(f"Number item queue must 1, got {len(pending)}")
+        failures.append(f"Expected one queued item, got {len(pending)}")
     else:
         queued = json.loads(pending[0]["payload"])
         if queued == SAMPLE_PAYLOAD:
-            print("  ✅ Payload in queue IDENTICAL with payload original (deep equality)")
+            print("  [OK] Queued payload is identical to the original")
         else:
-            failures.append(f"Payload in queue CHANGED from original!\n  original : {SAMPLE_PAYLOAD}\n  queue: {queued}")
+            failures.append(f"Queued payload changed\n  original: {SAMPLE_PAYLOAD}\n  queued: {queued}")
 
-    # 2) Simulate signal restored → flush_queue() must resend payload
+    # 2) Simulate signal restored -> flush_queue() must resend payload
     #    that SAME EXACTLY (not payload new/calculated again)
     sent_payloads = []
     original_post_once = api._post_once
@@ -88,22 +76,22 @@ def main():
         return True, 200, {"success": True}, False
 
     api._post_once = fake_post_once
-    api.online = True  # force assume signal already again
+    api.online = True
     api.flush_queue(db)
     api._post_once = original_post_once
 
     if len(sent_payloads) != 1:
-        failures.append(f"flush_queue() must send 1 payload, sent {len(sent_payloads)}")
+        failures.append(f"flush_queue() should send one payload, sent {len(sent_payloads)}")
     elif sent_payloads[0] != SAMPLE_PAYLOAD:
-        failures.append("Payload that in-flush AGAIN not same with payload original!")
+        failures.append("The flushed payload differs from the original")
     else:
-        print("  ✅ Payload that in-flush again after signal restored IDENTICAL with original")
+        print("  [OK] Flushed payload is identical to the original")
 
     remaining = db.count_pending_queue()
     if remaining != 0:
-        failures.append(f"Queue must empty after flush sukses, remaining {remaining}")
+        failures.append(f"Queue should be empty after a successful flush; {remaining} remain")
     else:
-        print("  ✅ Queue empty after successfully flushed")
+        print("  [OK] Queue empty after successfully flushed")
 
     db.close()
     api.close()
@@ -111,12 +99,12 @@ def main():
 
     print("\n" + "=" * 60)
     if failures:
-        print("  ❌ FAILED")
+        print("  [FAIL] FAILED")
         for f in failures:
             print(f"   - {f}")
         sys.exit(1)
     else:
-        print("  ✅ All checks integrity queue PASSED.")
+        print("  [OK] All queue integrity checks passed.")
 
 
 if __name__ == "__main__":

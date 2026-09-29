@@ -1,10 +1,10 @@
 """
-TEST — Soil Moisture Probe (two probe: surface + deep)
+TEST - Soil Moisture Probes (surface and deep)
 
-Probe SURFACE (CH2): depth 0-30cm — condition surface soil
-Probe DEEP    (CH3): depth 30-60cm — humidity inside soil
+SURFACE probe (CH0): depth 0-30 cm
+DEEP probe    (CH1): depth 30-60 cm
 
-Evaluation in EFWS retrieving value TERENDAH (terburuk) from both.
+EFWS evaluates both probes independently against their configured thresholds.
 
 Usage: python3 tests/test_soil.py
 """
@@ -19,23 +19,23 @@ print("=" * 60)
 
 try:
     sensor = SoilMoistureSensor()
-    print("[OK] Soil sensor diinisialisasi (CH2=surface, CH3=deep).\n")
+    print("[OK] Soil sensor initialized (CH0=surface, CH1=deep).\n")
 except Exception as e:
     print(f"[FAIL] {e}"); sys.exit(1)
 
-print("STEP CALIBRATION per probe:")
-print("  1. Probe in AIR KERING → record 'raw' → that dry_raw")
-print("  2. Probe SUBMERGED AIR    → record 'raw' → that wet_raw")
-print("  Update value in sensors/soil.py SoilMoistureSensor.__init__\n")
+print("CALIBRATION STEPS for each probe:")
+print("  1. Hold the probe in dry air and record raw as dry_raw")
+print("  2. Submerge the probe in water and record raw as wet_raw")
+print("  Update these values in SoilMoistureSensor.__init__ in sensors/soil.py\n")
 
-print("Reading every 1 seconds (Ctrl+C for stop)...\n")
+print("Reading once per second (Ctrl+C to stop)...\n")
 try:
     for _ in range(20):
         d = sensor.read()
         s = d["surface"]
         dp = d["deep"]
         worst = min(s["moisture_percent"], dp["moisture_percent"])
-        status = "🔴 CRITICAL" if worst < 10 else "🟡 WARNING" if worst < 20 else "🟢 OK"
+        status = "CRITICAL" if worst < 10 else "WARNING" if worst < 20 else "OK"
         print(f"  Surface: raw={s['raw']:4d}  {s['moisture_percent']:5.1f}%  |  "
               f"Deep: raw={dp['raw']:4d}  {dp['moisture_percent']:5.1f}%  |  "
               f"Worst={worst:.1f}%  {status}")

@@ -1,7 +1,7 @@
 """
-TEST 1 — MCP3008 (ADC SPI)
-Run BEFORE testing sensor analog anything (MQ-2/MQ-135/soil), because
-all sensor that bergantung to chip this.
+TEST 1 - MCP3008 (ADC SPI)
+Run this before testing the pressure, soil, or battery sensors because they all
+depend on this ADC.
 
 Usage: python3 tests/test_mcp3008.py
 """
@@ -15,22 +15,22 @@ from sensors.mcp3008 import MCP3008
 print("=" * 60)
 print("  TEST MCP3008 (SPI ADC)")
 print("=" * 60)
-print("Make sure SPI already enabled: sudo raspi-config -> Interface -> SPI -> Yes")
-print("Then check device: ls /dev/spidev* (must appears /dev/spidev0.0)\n")
+print("Enable SPI first: sudo raspi-config -> Interface -> SPI -> Yes")
+print("Then run ls /dev/spidev*; it must show /dev/spidev0.0.\n")
 
 try:
     adc = MCP3008()
     print(f"[OK] MCP3008 open in SPI bus={adc.bus}, device={adc.device}, VREF={adc.vref}V\n")
 except Exception as e:
-    print(f"[FAIL] Not can open MCP3008: {e}")
-    print("\nKemungkinan penyebab:")
-    print("  - SPI not yet enabled (raspi-config)")
-    print("  - spidev not yet terinstall (pip install spidev)")
+    print(f"[FAIL] Could not open MCP3008: {e}")
+    print("\nPossible causes:")
+    print("  - SPI is not enabled (raspi-config)")
+    print("  - spidev is not installed (pip install spidev)")
     print("  - Wiring CLK/DOUT/DIN/CS wrong (check docs/Pinout.md)")
     sys.exit(1)
 
-print("Reading all 8 channel during 10 seconds (Ctrl+C for stop more early)...")
-print("Channel that NOT connected sensor will shows value random/noise - that NORMAL.\n")
+print("Reading all eight channels for 10 seconds (Ctrl+C to stop)...")
+print("Unconnected channels may show random noise; that is normal.\n")
 
 try:
     for i in range(10):
@@ -46,6 +46,5 @@ except KeyboardInterrupt:
 finally:
     adc.close()
 
-print("\n[COMPLETE] If channel that exists a sensor (CH0-CH3) shows value")
-print("that CHANGES when You tutup sensor with hand / cable touched,")
-print("means wiring SPI MCP3008 already correct.")
+print("\n[COMPLETE] A connected CH0-CH3 value should change when its sensor input changes.")
+print("If it does, the MCP3008 SPI wiring is working.")

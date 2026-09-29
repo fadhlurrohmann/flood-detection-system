@@ -13,7 +13,7 @@ text. Error message/reason why sensor not readable ONLY stored in key
 separate `"error"` (of type string), NOT EVER mixed to field numeric.
 
 SENSOR_SCHEMAS lists field what only that should exists in each
-sensor (exactly same with shape return sensor original when success), biar
+sensor (the same shape returned by the real sensor when successful), so
 NullSensor.read() always returns shape (shape) that identical --
 complete with all key, only its contents null -- either diakses through
 `.get(...)` or directly `dict[...]`.
@@ -44,7 +44,7 @@ class NullSensor:
         # dict nested that also only contains None, therefore safe is not mutated.
         result = dict(self._fields)
         result["error"] = (
-            f"sensor '{self.name}' not terbaca/not installed: {self.reason}"
+            f"sensor '{self.name}' is unreadable or not installed: {self.reason}"
         )
         return result
 

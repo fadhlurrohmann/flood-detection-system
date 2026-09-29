@@ -1,8 +1,8 @@
 """
-TEST 8 — A7670E / SIM7670E (LTE Cat-1 4G + GNSS) Diagnostic Test
+TEST 8 - A7670E / SIM7670E (LTE Cat-1 4G + GNSS) Diagnostic Test
 
 Check complete: connection serial, AT dasar, SIM card, quality signal, GPS fix,
-and status connection data internet (dibawa up via ModemManager/NetworkManager,
+and internet connection status (brought up through ModemManager/NetworkManager,
 not directly through AT - see docs/DEPLOYMENT.md).
 
 Usage:
@@ -156,7 +156,7 @@ def test_gps(ser, timeout=90):
     print("  Make sure antenna GNSS installed and exists sky open.")
     print("  Cold start can require 15-60 seconds.\n")
 
-    # A7670E/SIM7670E use AT+CGNSSPWR=1 (SIM module7600 old use AT+CGPS=1 — different!)
+    # A7670E/SIM7670E use AT+CGNSSPWR=1 (SIM module7600 old use AT+CGPS=1 - different!)
     resp = send_at(ser, "AT+CGNSSPWR=1", wait=2)
     if "OK" in resp or "READY" in resp:
         result(OK, "GNSS engine ON")
@@ -263,7 +263,7 @@ def main():
     finally:
         ser.close()
 
-    header(f"RINGKASAN: {passed}/{total} test PASSED")
+    header(f"SUMMARY: {passed}/{total} tests PASSED")
     if passed == total:
         print("  All test PASSED. Module ready used.\n")
     elif passed >= total - 1:

@@ -14,10 +14,10 @@ def main():
     print("=" * 60)
 
     if not sensor.begin():
-        print("❌ Rainfall sensor not detected.")
+        print("[FAIL] Rainfall sensor not detected.")
         return
 
-    print("✅ Sensor detected")
+    print("[OK] Sensor detected")
     print("Firmware :", sensor.firmware_version())
     print()
 

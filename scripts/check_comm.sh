@@ -7,14 +7,14 @@
 #
 #   1. Run detect_sim() ORIGINAL from komunikasi/sim_detector.py (code
 #      production You its own) for ensuring module A7670E or SIM7600
-#      correct-correct readable, its signal level, and already registered to
+#      is readable, its signal level, and whether it is registered with
 #      network or not yet.
 #   2. Check whether ModemManager & profile GSM already use interface that
 #      correct (cdc-wdm, not port serial that used app).
 #   3. Check status Tailscale -- whether accept-routes/exit-node active
 #      (that can geser default route) and whether DNS in-takeover.
 #   4. Tes resolusi DNS + reachability actual to EFWS_API_URL, simultaneously
-#      show through interface which traffic that correct-correct exit.
+#      show which interface actually carries outbound traffic.
 #
 # IMPORTANT: Run script this WHEN efws.service IS STOPPED.
 # Why: sim_detector.py opens /dev/ttyUSB* in a eksklusif via
@@ -94,8 +94,8 @@ else
 fi
 
 # =============================================================================
-# 2. Run detect_sim() ORIGINAL from code aplikasi -- this correct-correct
-#    run "section communication"-nya, not simulasi.
+# 2. Run the application's real detect_sim() implementation. This exercises
+#    the communication module itself rather than a simulation.
 # =============================================================================
 log "2. Run communication/sim_detector.py (detect_sim, force_scan)"
 
@@ -178,7 +178,7 @@ else
             RESOLV_INFO=$(resolvectl status 2>/dev/null || true)
             if echo "$RESOLV_INFO" | grep -q "100.100.100.100"; then
                 info "Tailscale MagicDNS (100.100.100.100) active as one DNS server."
-                w "If resolusi hostname EFWS_API_URL tiba-tiba slow/failed although connection GSM sehat, try: sudo tailscale set --accept-dns=false then tes again."
+                w "If EFWS_API_URL hostname resolution becomes slow or fails while GSM is healthy, run: sudo tailscale set --accept-dns=false, then test again."
             else
                 ok "Tailscale not retrieving alih DNS resolver global."
             fi
@@ -199,7 +199,7 @@ info "Interface active for internet when this: ${ACTIVE_IFACE:-not diketahui}"
 if [ "$ACTIVE_IFACE" = "cdc-wdm0" ] || echo "$ACTIVE_IFACE" | grep -q "wwan\|cdc-wdm"; then
     ok "Default route through modem GSM (according to priority that desired)."
 elif [ -n "$ACTIVE_IFACE" ]; then
-    w "Default route when this through '$ACTIVE_IFACE' (not GSM). If GSM medium connected also, check again route-metric-nya."
+    w "The default route currently uses '$ACTIVE_IFACE' rather than GSM. If GSM is connected, check its route metric."
 fi
 
 # Get EFWS_API_URL from .env project for tes directly
@@ -231,12 +231,12 @@ else
 fi
 
 # =============================================================================
-# Ringkasan
+# Summary
 # =============================================================================
-log "Ringkasan"
+log "Summary"
 info "OK=$pass  WARN=$warn  FAIL=$fail"
 if [ "$fail" -gt 0 ]; then
-    info "Exists failure that needs ditindaklanjuti before sure route komunikasi sehat."
+    info "Resolve the failures above before treating the communication route as healthy."
 elif [ "$warn" -gt 0 ]; then
     info "None failure fatal, but several items for checked manual (see WARN above)."
 else

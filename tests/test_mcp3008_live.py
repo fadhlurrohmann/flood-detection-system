@@ -28,7 +28,7 @@ try:
 
             percent = raw / 1023 * 100
 
-            bar = "█" * int(percent / 2)
+            bar = "#" * int(percent / 2)
 
             print(
                 f"CH{ch}: "

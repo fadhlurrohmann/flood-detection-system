@@ -107,7 +107,7 @@ source venv/bin/activate
 python3 tests/test_webhook_api.py
 ```
 Open page webhook.site You — one request POST JSON telemetry must
-appear live in sana. If this success, route Pi → internet → API already
+appear there live. If this succeeds, the Pi-to-internet-to-API route is
 terbukti bekerja, new continue to testing sensor one by one.
 
 > not yet a connection internet/4G in Pi? Use `tools/mock_api_server.py`
@@ -120,11 +120,11 @@ terbukti bekerja, new continue to testing sensor one by one.
 ## STAGE 6 — Test every sensor one by one (ORDER THIS IMPORTANT)
 
 Run **sequential** — If one failed, resolve it first before continue
-to that next (sensor analog all bergantung to MCP3008, therefore
+to the next test (all analog sensors depend on the MCP3008, so
 If test #1 failed, all sensor analog afterward also will failed).
 
 ```bash
-# 1. MCP3008 first - fondasi all sensor analog
+# 1. MCP3008 first - foundation for all analog sensors
 python3 tests/test_mcp3008.py
 
 # 2. MQ-2 & MQ-135 (analog, through MCP3008)
@@ -151,10 +151,10 @@ python3 tests/test_a7670e.py --gps-timeout 90
 # 9. Relay + Siren (⚠️ SUARA LOUD 120dB, read warning in the script)
 python3 tests/test_relay_siren.py
 
-# 10. All sensor simultaneously, one putaran read (final check before main.py)
+# 10. All sensors together, one read cycle (final check before main.py)
 python3 tests/test_all_sensors.py
 
-# 11. Integrity offline queue (simulasi signal lost, check data NOT changes)
+# 11. Offline queue integrity (simulate signal loss and verify data is unchanged)
 python3 tests/test_offline_queue_integrity.py
 ```
 
@@ -169,7 +169,7 @@ nano .env
 python3 main.py
 ```
 Amati several cycle read (default every 5 seconds) — make sure all value
-sensor enter sense, then check webhook.site for confirmation data correct-correct
+sensor produces sensible values, then check webhook.site to confirm that the data
 sent. Press `Ctrl+C` for stop After sure all running either.
 
 ---
@@ -229,7 +229,7 @@ nano .env
 |----------|--------|------------------------|
 | MCP3008 | `test_mcp3008.py` failed open SPI | SPI not active yet in raspi-config; `spidev` not yet terinstall; wiring CLK/DOUT/DIN/CS wrong |
 | MQ-2/MQ-135 | value always stuck in numeric same (clipping) | Forgot to install logic level converter in route analog path |
-| MQ-2/MQ-135 | value ppm NOT enter sense | Sensor not yet preheat (needs 24-48 hours for akurasi full) |
+| MQ-2/MQ-135 | ppm value is not sensible | Sensor has not warmed up (24-48 hours may be needed for full accuracy) |
 | BME280 | `i2cdetect -y 1` NOT appear 0x76 | I2C not active yet; wiring SDA/SCL reversed; address actually 0x77 (set `EFWS_BME280_ADDR=0x77`) |
 | Soil probe | moisture_percent always 0% or 100% | not calibrated yet (`dry_raw`/`wet_raw` in `sensors/soil.py`) |
 | Pressure sensor | `current_ma` always ~0, `fault_open_loop=True` | Loop disconnected/not yet connected, or PSU 12-24V loop not yet on — Run `python3 tests/test_pressure.py` for diagnosis |

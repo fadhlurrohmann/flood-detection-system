@@ -183,7 +183,7 @@ class DBManager:
         """
         Delete rows OLD (more old from `days` days) from local database.
         Dipanggil automatically by background thread (main.py:
-        EFWS._retention_loop), not deleting file database-nya its own --
+        EFWS._retention_loop); it does not delete the database file itself.
         only rows old in it, so that data newest (<= `days` days)
         still exists and size file not continuously membengkak.
 

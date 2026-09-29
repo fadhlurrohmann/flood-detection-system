@@ -611,7 +611,7 @@ Run:
 speedtest-cli --simple
 ```
 
-check first route so that speedtest correct-correct through modem:
+first verify the route so that speedtest actually uses the modem:
 
 ```bash
 ip route get 8.8.8.8
@@ -730,7 +730,7 @@ sudo nmcli connection up "EWS-4G"
 
 ---
 
-## 15. Ringkasan command important
+## 15. Summary of important commands
 
 ```bash
 # check power

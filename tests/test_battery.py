@@ -1,9 +1,9 @@
 """
-TEST — Module Sensor Voltage DC 0-25V (battery, through MCP3008 CH5)
+TEST - DC 0-25V Battery Voltage Sensor (through MCP3008 CH3)
 
 Check first before run:
-  ls /dev/spidev*  → must exists /dev/spidev0.0
-  Pin S module connected to LLC HV-6 → LV-6 → MCP3008 CH5
+  ls /dev/spidev*  -> must show /dev/spidev0.0
+  Module S pin connected to LLC HV-3 -> LV-3 -> MCP3008 CH3
 
 Usage: python3 tests/test_battery.py
 """
@@ -13,16 +13,16 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from sensors.battery import BatterySensor
 
 print("=" * 60)
-print("  TEST — Battery Voltage Sensor (MCP3008 CH5)")
+print("  TEST - Battery Voltage Sensor (MCP3008 CH3)")
 print("=" * 60)
 
 sensor = BatterySensor()
-print("Reading 5x, every 2 seconds (Ctrl+C for stop more early)...\n")
+print("Taking five readings at two-second intervals (Ctrl+C to stop)...\n")
 try:
     for i in range(5):
         reading = sensor.read()
         print(f"  [{i+1}] voltage={reading['voltage']}V  percent={reading['percent']}%")
         time.sleep(2)
-    print("\n✅ Battery sensor read successfully.")
+    print("\n[OK] Battery sensor read successfully.")
 except KeyboardInterrupt:
     print("\nStopped by user.")

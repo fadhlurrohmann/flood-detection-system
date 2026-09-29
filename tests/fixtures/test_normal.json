@@ -3,16 +3,11 @@
   "deviceToken": "test",
   "telemetry": [
     {
-      "timestamp": "2025-06-30T07:00:00.000Z",
-      "waterLevel": 3.317,
-      "waterLevelCurrentMa": 14.614,
-      "smokeLevel": 9.8,
-      "temp": 29.5,
-      "humidity": 63.0,
-      "soilMoisture": 60.0,
-      "batteryLevel": 85.0,
-      "flameDetected": false,
-      "windSpeed": 2.5
+      "timestamp": "2026-09-29T07:00:00.000Z",
+      "waterLevel": 1.8,
+      "distanceM": 0.75,
+      "soilMoisture": {"surface": 58.0, "deep": 64.0},
+      "rainfallMm": 0.4
     }
   ]
 }

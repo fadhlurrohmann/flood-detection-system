@@ -59,7 +59,7 @@ def _load_sim():
         logger.info("SIM module: %s @ %s", sim.module.upper(), sim.port)
         return sim
     except Exception as e:
-        logger.warning("SIM cannot diinisialisasi: %s — GPS disabled.", e)
+        logger.warning("SIM could not be initialized: %s — GPS disabled.", e)
         return None
 
 
@@ -206,7 +206,7 @@ class EFWS:
         logger.info("📡 Requesting data GPS from %s (port=%s)...",
                     module_name, getattr(self.sim, "port", "?"))
         try:
-            result = self.sim.get_gps(timeout=settings._int("EFWS_GPS_TIMEOUT", 90))
+            result = self.sim.get_gps(timeout=settings.GPS_TIMEOUT)
         except Exception as e:
             logger.warning("📍 GPS error from %s: %s -- location STILL use value previously/fallback.",
                            module_name, e)
@@ -221,7 +221,7 @@ class EFWS:
                 "fix":        True,
             }
             logger.info(
-                "📍 GPS FIX NYATA from %s: lat=%.6f, lon=%.6f, alt=%sm%s",
+                "📍 Live GPS fix from %s: lat=%.6f, lon=%.6f, alt=%sm%s",
                 module_name, result["lat"], result["lon"],
                 result.get("altitude_m"),
                 f" | mock=True (not hardware original)" if result.get("_mock") else "",
@@ -320,8 +320,8 @@ class EFWS:
     def _build_heartbeat_payload(self, data) -> dict:
         # NOTE: batteryLevel first obtained from sensor battery that already
         # deleted (not section from 3 sensor: pressure/soil/rain). If
-        # backend REQUIRED receive batteryLevel numeric every heartbeat, kasih
-        # tau -- we can add battery only for purpose heartbeat this.
+        # If the backend requires a numeric batteryLevel on every heartbeat,
+        # a battery sensor can be added specifically for this payload.
         return {
             "deviceId":     settings.DEVICE_ID,
             "deviceToken":  settings.DEVICE_TOKEN,

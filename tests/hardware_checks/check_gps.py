@@ -1,24 +1,24 @@
 """
-CHECK — GPS / GNSS (verify data GPS ACTUALLY datang from physical module
+CHECK - GPS / GNSS (verify data GPS ACTUALLY datang from physical module
 A7670E/SIM7670E or SIM7600, not cache/fallback config old)
 
 Why needs script this:
   main.py only using GPS in a passively (poll every cycle). Script this
   in a explicit:
-    1. Deteksi module that installed (A7670E or SIM7600) beserta port-nya.
-    2. Check module correct-correct responds AT command (not port off/nyasar).
+    1. Detect the installed module (A7670E or SIM7600) and its serial port.
+    2. Verify that the module responds to AT commands on the selected port.
     3. Turn on GNSS & polling AT+CGPSINFO until got fix or timeout.
     4. Display RAW NMEA response from module (+CGPSINFO: ...) as evidence
-       data that correct-correct new read now from GNSS engine, not
+       data freshly read from the GNSS engine rather than
        value old/result hardcode.
-    5. Cetak ringkasan PASS/FAIL, and SIMULTANEOUSLY tulis the result to efws.log
+    5. Print a PASS/FAIL summary and also write the result to efws.log.
        (logger that same used main.py) so that exists jejak permanently.
 
 IMPORTANT (why file this NOT named tests/test_gps.py):
   Ditaruh in tests/hardware_checks/ with prefix "check_" (not "test_")
   so that NOT ikut ter-collect by pytest -- script this accesses hardware
   serial actual (open port /dev/ttyUSBx) that will crash/hang if
-  pytest trying meng-import-nya in lingkungan without modem (CI, laptop dev,
+  pytest may import it in an environment without a modem (CI or a development laptop),
   dst). Run manual, not through pytest.
 
 Usage:
@@ -38,8 +38,8 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspa
 
 from config import settings
 
-# ─── Logger: use handler that SAME with main.py (console + efws.log) ────
-# So that result check this also permanently tercatat in file log that same,
+# --- Logger: use handler that SAME with main.py (console + efws.log) ----
+# Record this check permanently in the same log file,
 # not only tampil in layar then lost.
 Path(settings.LOG_PATH).parent.mkdir(parents=True, exist_ok=True)
 logging.basicConfig(
@@ -70,7 +70,7 @@ def result(status, label, value=""):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Check whether GPS correct-correct retrieving data from A7670E/SIM7600")
+    parser = argparse.ArgumentParser(description="Check whether GPS data can be retrieved from A7670E/SIM7600")
     parser.add_argument("--timeout", type=int, default=settings._int("EFWS_GPS_TIMEOUT", 90),
                          help="Seconds waiting GNSS fix (default: EFWS_GPS_TIMEOUT / 90s)")
     parser.add_argument("--force", action="store_true", help="Ignore .sim_cache, scan again all port")
@@ -79,13 +79,13 @@ def main():
                          help="Force module specific (used together --port)")
     args = parser.parse_args()
 
-    header("CHECK GPS — Deteksi module & get fix actual")
+    header("CHECK GPS - Deteksi module & get fix actual")
 
     if settings.RUN_MODE == "mock":
         result(WARN, "RUN_MODE=mock", "GPS will simulated (MockSimInterface), NOT data hardware original")
         print("  Set EFWS_RUN_MODE=hardware in .env for tes physical module actual.")
 
-    # ── 1) Deteksi / select module ──────────────────────────────────
+    # -- 1) Deteksi / select module ----------------------------------
     from communication.sim_detector import detect_sim, SimInterface, scan_ports
 
     try:
@@ -103,7 +103,7 @@ def main():
     is_mock = getattr(sim, "module", "") == "mock"
     result(OK if not is_mock else WARN, "Module detected", f"{sim.module.upper()} @ {sim.port}")
 
-    # ── 2) Module correct-correct responds AT (not port off) ────────
+    # -- 2) Confirm that the module responds to AT commands ---------
     header("Check module responds AT command")
     try:
         alive = sim.check_module()
@@ -119,7 +119,7 @@ def main():
     except Exception as e:
         result(WARN, "Quality signal", f"failed read: {e}")
 
-    # ── 3) Get GPS fix ACTUAL (polling AT+CGPSINFO) ──────────────
+    # -- 3) Get GPS fix ACTUAL (polling AT+CGPSINFO) --------------
     header(f"Request GPS fix (timeout {args.timeout}s) -- this will waiting, ensure antenna GNSS outside/sky open")
     logger.info("GPS CHECK: start polling fix from %s @ %s (timeout=%ds)",
                 sim.module.upper(), sim.port, args.timeout)
@@ -131,7 +131,7 @@ def main():
         result(INFO, "Altitude", f"{gps_result.get('altitude_m')} m")
         result(INFO, "Time fix (UTC)", f"{gps_result.get('date_utc')} {gps_result.get('time_utc')}")
 
-        # Evidence directly bahwa this data LIVE from module, not value old:
+        # Evidence that this is live module data rather than a stale value:
         # display raw NMEA response exactly like that sent module.
         raw_nmea = gps_result.get("raw")
         if raw_nmea:
@@ -162,7 +162,7 @@ def main():
 
     sim.close()
 
-    header("Ringkasan")
+    header("Summary")
     print(json.dumps({
         "module": sim.module,
         "port": sim.port,

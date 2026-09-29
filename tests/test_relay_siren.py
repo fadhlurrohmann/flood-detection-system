@@ -1,9 +1,9 @@
 """
-TEST 7 — Relay 5V + Siren 12V/24V/220V 120dB (with LED flasher)
+TEST 7 - Relay 5V + Siren 12V/24V/220V 120dB (with LED flasher)
 
-⚠️  WARNING: Siren this 120dB - VERY LOUD. Make sure You ready
-    before run test this (tutup telinga / jaga distance / beri tahu
-    people nearby). Test this will correct-correct activating siren physical.
+[WARNING]  WARNING: Siren this 120dB - VERY LOUD. Make sure You ready
+    before running this test (cover your ears, keep your distance, and warn
+    people nearby). This test activates the physical siren.
 
 Usage: python3 tests/test_relay_siren.py
 """
@@ -17,7 +17,7 @@ from alarm.siren import AlarmController
 print("=" * 60)
 print("  TEST Relay + Siren 12V (120dB)")
 print("=" * 60)
-print("⚠️  Siren will SOUND LOUD on test this.")
+print("[WARNING]  Siren will SOUND LOUD on test this.")
 confirm = input("Ketik 'ya' for continue, or Enter for batal: ").strip().lower()
 if confirm != "ya":
     print("Canceled.")
@@ -25,7 +25,7 @@ if confirm != "ya":
 
 try:
     ctrl = AlarmController()
-    print("\n[OK] Relay diinisialisasi.\n")
+    print("\n[OK] Relay initialized.\n")
 except Exception as e:
     print(f"[FAIL] Failed inisialisasi relay: {e}")
     sys.exit(1)

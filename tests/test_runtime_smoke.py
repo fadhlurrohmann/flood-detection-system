@@ -8,6 +8,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 os.environ.setdefault("EFWS_RUN_MODE", "mock")
 
 from sensors import mcp3008
+from config import settings
 from config.threshold_resolver import resolve_active_thresholds
 from sensors.mock_sensors import MockPressureWater, MockRainfall, MockSoilMoisture
 
@@ -31,6 +32,10 @@ class FakeSPI:
 
 
 def main():
+    assert settings.GPS_TIMEOUT > 0
+    assert settings.SIM7600_AT_PORT
+    assert settings.SIM7600_BAUDRATE > 0
+
     fake_spi = FakeSPI()
     original_spidev = mcp3008.spidev
     mcp3008.spidev = SimpleNamespace(SpiDev=lambda: fake_spi)

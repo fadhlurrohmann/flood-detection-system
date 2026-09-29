@@ -1,5 +1,5 @@
 """
-TEST — SIM Auto-Detector (A7670E vs SIM7600)
+TEST - SIM Auto-Detector (A7670E vs SIM7600)
 
 Script this Simulates process that occurs when EFWS startup in mode hardware:
   1. Scan all port /dev/ttyUSBx
@@ -25,15 +25,15 @@ print("  TEST SIM Auto-Detector")
 print("=" * 60)
 
 if settings.RUN_MODE == "mock":
-    print("Mode MOCK — no scan real hardware.")
+    print("Mode MOCK - no scan real hardware.")
     print("Inside production (RUN_MODE=hardware), detector will:")
     print("  1. Scan /dev/ttyUSB* one per one")
     print("  2. Send AT + ATI to every port")
-    print("  3. A7670E/SIM7670E → fingerprint 'A7670E' in ATI → use AT+CGNSSPWR for GPS")
-    print("  4. SIM7600          → fingerprint 'SIM7600' in ATI → use AT+CGPS for GPS")
+    print("  3. A7670E/SIM7670E -> fingerprint 'A7670E' in ATI -> use AT+CGNSSPWR for GPS")
+    print("  4. SIM7600          -> fingerprint 'SIM7600' in ATI -> use AT+CGPS for GPS")
     print("  5. Cache port to .sim_cache for boot next")
     print()
-    print("Perintah berguna for troubleshoot in Pi:")
+    print("Useful Raspberry Pi troubleshooting commands:")
     print("  ls /dev/ttyUSB*")
     print("  dmesg | grep ttyUSB")
     print("  python3 -c \"import serial.tools.list_ports; print(list(serial.tools.list_ports.comports()))\"")
@@ -49,7 +49,7 @@ if CACHE_FILE.exists() and not args.force:
         print(f"  module : {cached.get('module','?').upper()}")
         print(f"  port   : {cached.get('port','?')}")
         print()
-        print("Use --force for scan again (berguna after replace hardware).")
+        print("Use --force to scan again after replacing hardware.")
     except Exception as e:
         print(f"  Cache rusak: {e}")
     print()
@@ -58,7 +58,7 @@ print("Starting scan port...")
 result = scan_ports()
 
 if result:
-    print(f"\n✅ Module found: {result['module'].upper()} @ {result['port']}")
+    print(f"\n[OK] Module found: {result['module'].upper()} @ {result['port']}")
     if result["module"] == "a7670e":
         print("   GPS command: AT+CGNSSPWR=1 (A7670E/SIM7670E command set)")
     else:
@@ -69,14 +69,14 @@ if result:
         sim = detect_sim(force_scan=args.force)
         gps = sim.get_gps(timeout=30)
         if gps.get("fix"):
-            print(f"✅ GPS fix: lat={gps['lat']}, lon={gps['lon']}")
+            print(f"[OK] GPS fix: lat={gps['lat']}, lon={gps['lon']}")
         else:
-            print(f"⚠️  GPS not yet fix: {gps.get('reason')} (normal if just power-on / indoor)")
+            print(f"[WARNING]  GPS not yet fix: {gps.get('reason')} (normal if just power-on / indoor)")
         sim.close()
     except Exception as e:
-        print(f"❌ Error: {e}")
+        print(f"[FAIL] Error: {e}")
 else:
-    print("\n❌ No SIM module detected.")
+    print("\n[FAIL] No SIM module detected.")
     print("\nCek:")
     print("  1. ls /dev/ttyUSB* (make sure adapter USB detected)")
     print("  2. Module already powered on and SIM card installed")

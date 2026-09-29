@@ -113,7 +113,7 @@ class APIPublisher:
             self.online = False
             return False, None, None, True
 
-        # Server correct-correct responds -> connection network sehat.
+        # A valid server response confirms that the network path is healthy.
         self.online = True
 
         try:
