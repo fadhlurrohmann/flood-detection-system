@@ -127,6 +127,15 @@ GPIO_JSN_ECHO = _int("EWF_JSN_ECHO", 18)
 #------- YF-S201-------------
 GPIO_YF = _int("EWF_GPIO_YF", 16)
 
+# ─── RS485 wind-speed anemometer (Modbus RTU) ───────────────────────────────
+# Verify register address and scale against the specific anemometer datasheet.
+ANEMOMETER_PORT = _opt("EFWS_ANEM_PORT", "/dev/ttyUSB0")
+ANEMOMETER_BAUDRATE = _int("EFWS_ANEM_BAUDRATE", 9600)
+ANEMOMETER_SLAVE_ID = _int("EFWS_ANEM_SLAVE_ID", 1)
+ANEMOMETER_SPEED_REGISTER = int(_opt("EFWS_ANEM_SPEED_REGISTER", "0"), 0)
+ANEMOMETER_FUNCTION_CODE = _int("EFWS_ANEM_FUNCTION_CODE", 3)
+ANEMOMETER_SPEED_SCALE = _float("EFWS_ANEM_SPEED_SCALE", 0.1)
+
 # ─── A7670E / SIM7670E 4G LTE Cat-1 ──────────────────────────────────────────────────────────
 A7670E_AT_PORT  = _opt("EFWS_SIM_PORT", "/dev/ttyUSB2")
 A7670E_BAUDRATE = _int("EFWS_A7670E_BAUD", 115200)
