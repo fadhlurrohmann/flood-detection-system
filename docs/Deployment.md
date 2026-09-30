@@ -78,6 +78,14 @@ pip install -r requirements.txt
 deactivate
 ```
 
+Install dependencies required for LGPIO python library installation. 
+```bash
+sudo apt update
+sudo apt install swig python3-dev
+sudo apt install liblgpio-dev
+```
+
+
 ---
 
 ## TAHAP 4 — Setup `.env` (mode mock dulu, lalu webhook.site)
