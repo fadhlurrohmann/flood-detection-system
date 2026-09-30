@@ -1,30 +1,20 @@
-# EFWS — Panduan Lengkap: Wiring → Testing → Prototyping API → Jalan di Background
+# EFWS — Complete Guide: Wiring → Testing → Prototyping API → Running in the Background
 
-Panduan ini dari NOL sampai EFWS jalan stabil di background, memakai
-hardware aktual: Raspberry Pi 4, MCP3008 (ADC SPI), Logic Level Converter,
-MQ-2, MQ-135, BME280, 2x Soil moisture probe, Submersible pressure sensor
-(4-20mA), Modul sensor tegangan DC 0-25V (baterai), RS485 Anemometer,
-A7670E/SIM7600 (4G+GNSS, salah satu saja), Relay 5V + Sirine 12V 120dB.
+This guide goes from ZERO to having EFWS running stably in the background, using actual hardware: Raspberry Pi 4, MCP3008 (SPI ADC), Logic Level Converter, MQ-2, MQ-135, BME280, 2x Soil moisture probes, Submersible pressure sensor (4-20mA), 0-25V DC voltage sensor module (battery), RS485 Anemometer, A7670E/SIM7600 (4G+GNSS, use one), 5V Relay + 12V 120dB Siren.
 
-Struktur project ini **flat** — `main.py` ada langsung di root project
-(bukan di subfolder). `venv/`, `.env`, `scripts/`, `logs/`, `database/`
-semuanya sejajar dengan `main.py`.
+The project structure is **flat** — `main.py` is located directly in the project root (not in a subfolder). `venv/`, `.env`, `scripts/`, `logs/`, `database/`
+are all aligned to `main.py`.
 
 ---
 
-## TAHAP 0 — Wiring fisik
+## STAGE 0 — Physical Wiring
 
-**WAJIB dibaca dulu**: `docs/Pinout.md` — berisi tabel wiring lengkap per
-komponen, termasuk catatan keselamatan logic level converter (sinyal 5V
-sensor analog HARUS lewat level converter sebelum masuk MCP3008/GPIO) dan
-catatan keselamatan jalur 12V sirine.
+**MUST read first**: `docs/Pinout.md` — contains a complete wiring table for each component, including logic level converter safety notes (the 5V analog sensor signal MUST pass through the level converter before entering the MCP3008/GPIO) and safety notes for the siren's 12V line.
 
-Setelah semua kabel terpasang, **JANGAN langsung jalankan kode** — lanjut
-dulu ke persiapan OS & cek device terlebih dulu di Tahap 2.
+Once all cables are installed, **DO NOT run the code immediately** — proceed to
+OS preparation and device checks in Step 2.
 
----
-
-## TAHAP 1 — Pindahkan project ke Raspberry Pi
+## STEP 1 — Transfer the project to the Raspberry Pi
 
 ```bash
 scp -r efws pi@<ip-raspberry-pi>:/home/pi/efws
@@ -34,33 +24,32 @@ cd /home/pi/efws
 
 ---
 
-## TAHAP 2 — Persiapan OS (sekali saja)
+## STAGE 2 — OS preparation (one time only)
 
 ```bash
 sudo apt update && sudo apt install -y python3-venv python3-pip \
     i2c-tools usb-modeswitch modemmanager network-manager git
 
 sudo raspi-config
-# Interface Options -> I2C  -> Yes   (untuk BME280)
-# Interface Options -> SPI  -> Yes   (untuk MCP3008)
+# Interface Options -> I2C -> Yes (for BME280)
+# Interface Options -> SPI -> Yes (for MCP3008)
 # Interface Options -> Serial Port -> "login shell over serial" = No,
-#                                     "serial port hardware" = Yes
-#                                     (HANYA jika A7670E disambung via UART,
-#                                      kalau via USB langkah ini bisa dilewati)
+#                                      "serial port hardware" = Yes
+#                                       (ONLY if the A7670E is connected via UART,
+#                                       if via USB, this step can be skipped)
 sudo reboot
 ```
 
-Setelah reboot, cek device-device fisik sudah terdeteksi sebelum lanjut:
+After rebooting, check that the physical devices are detected before continuing:
 ```bash
-ls /dev/spidev*     # harus muncul /dev/spidev0.0 (MCP3008)
-i2cdetect -y 1       # harus muncul 0x76 (BME280)
-ls /dev/ttyUSB*      # harus muncul beberapa ttyUSBx (A7670E + anemometer)
+ls /dev/spidev*              # should show /dev/spidev0.0 (MCP3008)
+i2cdetect -y 1               # should show 0x76 (BME280)
+ls /dev/ttyUSB*              # should show multiple ttyUSBx (A7670E + anemometer)
 ```
-Kalau salah satu di atas TIDAK muncul, berhenti dulu dan cek wiring/
-`raspi-config` sebelum lanjut — jangan paksa lanjut ke instalasi Python.
+If any of the above does NOT appear, stop first and check the wiring/
+`raspi-config` before continuing — do not force continue with Python installation.
 
-Tambahkan user `pi` ke grup yang dibutuhkan supaya tidak perlu `sudo`
-tiap akses hardware:
+Add the `pi` user to the required groups to avoid having to use `sudo` for each hardware access:
 ```bash
 sudo usermod -aG gpio,spi,i2c,dialout pi
 sudo reboot
@@ -68,7 +57,7 @@ sudo reboot
 
 ---
 
-## TAHAP 3 — Setup Python environment
+## STAGE 3 — Setup Python environment
 
 ```bash
 cd /home/pi/efws
@@ -80,165 +69,153 @@ deactivate
 
 ---
 
-## TAHAP 4 — Setup `.env` (mode mock dulu, lalu webhook.site)
+## STEP 4 — Setup `.env` (mock mode first, then webhook.site)
 
 ```bash
 cp .env.example .env
 nano .env
 ```
 
-Untuk **prototyping cepat ke API**, buka https://webhook.site di browser,
-copy "Your unique URL", lalu isi:
+For **quick API prototyping**, open https://webhook.site in a browser, copy "Your unique URL," and then enter:
+
 ```ini
 EFWS_RUN_MODE=mock
 EFWS_API_URL=https://webhook.site/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
 EFWS_API_KEY=
 ```
-Biarkan `EFWS_RUN_MODE=mock` dulu di tahap ini — kita test koneksi API
-TANPA hardware terlebih dulu, baru testing per-sensor satu-satu, baru
-pindah ke `hardware` di TAHAP 7.
+Leave `EFWS_RUN_MODE=mock` for now — we'll test the API connection
+WITHOUT hardware first, then test each sensor individually, then move on to `hardware` in STEP 7.
 
 ---
 
-## TAHAP 5 — Test koneksi API (webhook.site) duluan
+## STEP 5 — Test the API connection (webhook.site) first
 
 ```bash
 source venv/bin/activate
 python3 tests/test_webhook_api.py
 ```
-Buka halaman webhook.site Anda — satu request POST JSON telemetry harus
-muncul live di sana. Kalau ini sukses, jalur Pi → internet → API sudah
-terbukti bekerja, baru lanjut ke testing sensor satu-satu.
+Open your webhook.site page — a single JSON telemetry POST request should appear live there. If this is successful, the Pi → internet → API path has been proven to work. Now, you can proceed to testing the sensors individually.
 
-> Belum ada koneksi internet/4G di Pi? Pakai `tools/mock_api_server.py`
-> dulu (jalankan di laptop yang satu jaringan dengan Pi, lalu set
-> `EFWS_API_URL=http://<ip-laptop>:5000/api/v1/efws` di `.env`) supaya bisa
-> lihat JSON yang terkirim secara langsung tanpa perlu internet sama sekali.
+
+> Don't have an internet/4G connection on your Pi? Use `tools/mock_api_server.py`
+> first (run it on a laptop on the same network as the Pi, then set
+> `EFWS_API_URL=http://<laptop-ip>:5000/api/v1/efws` in `.env`) to view the sent JSON directly without needing an internet connection at all.
 
 ---
 
-## TAHAP 6 — Test tiap sensor satu-satu (URUTAN INI PENTING)
+## STEP 6 — Test each sensor one by one (THIS ORDER IS IMPORTANT)
 
-Jalankan **berurutan** — kalau satu gagal, selesaikan dulu sebelum lanjut
-ke yang berikutnya (sensor analog semuanya bergantung ke MCP3008, jadi
-kalau test #1 gagal, semua sensor analog setelahnya juga akan gagal).
+Run them **in order** — if one fails, resolve it before moving on to the next (the analog sensors are all dependent on the MCP3008, so if test #1 fails, all analog sensors after it will fail as well).
 
 ```bash
-# 1. MCP3008 dulu - fondasi semua sensor analog
+#1. MCP3008 first - the foundation of all analog sensors
 python3 tests/test_mcp3008.py
 
-# 2. MQ-2 & MQ-135 (analog, lewat MCP3008)
-python3 tests/test_gas_sensors.py
-
-# 3. BME280 (I2C, independen dari MCP3008)
+# 2. BME280 (I2C, independent of MCP3008)
 python3 tests/test_bme280.py
 
-# 4. Soil moisture probe (analog, lewat MCP3008) - termasuk kalibrasi
-python3 tests/test_soil.py
-
-# 5. Submersible pressure sensor (analog via burden resistor, lewat MCP3008)
+# 3. Submersible pressure sensor (analog via burden resistor, lewat MCP3008)
 python3 tests/test_pressure.py
 
-# 6. Battery voltage sensor (analog, lewat MCP3008)
+# 4. Battery voltage sensor (analog, via MCP3008)
 python3 tests/test_battery.py
 
-# 7. RS485 Anemometer
+# 5. RS485 Anemometer
 python3 tests/test_anemometer.py
 
-# 8. A7670E/SIM7600 - sinyal, SIM, GPS
+#6 JSN_SR04T ultrasonic
+python3 tests/test_JSN_SR04T.p6
+
+#7 YF_S201.py flow sensor
+python3 tests/test_YF_S201.py
+
+#8. A7670E/SIM7600 - sinyal, SIM, GPS
 python3 tests/test_a7670e.py --gps-timeout 90
 
-# 9. Relay + Sirine (⚠️ SUARA KERAS 120dB, baca peringatan di scriptnya)
+#9. Relay + Sirine (⚠️ LOUD NOISE 120dB, read cautions from script)
 python3 tests/test_relay_siren.py
 
-# 10. Semua sensor sekaligus, satu putaran baca (final check sebelum main.py)
+#10. All sensors at once, one read loop (final check before main.py)
 python3 tests/test_all_sensors.py
 
-# 11. Integritas antrian offline (simulasi sinyal terputus, cek data tidak berubah)
+#11. Offline queue integrity (simulate signal disconnection, check data is unchanged)
 python3 tests/test_offline_queue_integrity.py
 ```
 
 ---
 
-## TAHAP 7 — Jalankan EFWS penuh di mode hardware (foreground dulu)
+## STEP 7 — Run full EFWS in hardware mode (foreground first)
 
 ```bash
 nano .env
-# Ubah: EFWS_RUN_MODE=hardware
+# change: EFWS_RUN_MODE=hardware
 
 python3 main.py
 ```
-Amati beberapa siklus baca (default tiap 5 detik) — pastikan semua nilai
-sensor masuk akal, lalu cek webhook.site untuk konfirmasi data benar-benar
-terkirim. Tekan `Ctrl+C` untuk berhenti setelah yakin semuanya jalan baik.
+Observe several read cycles (default is every 5 seconds) — ensure all sensor values ​​are reasonable, then check webhook.site to confirm the data was actually sent. Press Ctrl+C to stop once you're sure everything is working properly.
 
 ---
 
-## TAHAP 8 — Jalankan di background (tanpa mengganggu terminal)
+## STEP 8 — Run in background (without disturbing terminal)
 
-Dua cara — pilih salah satu sesuai kebutuhan:
+Two ways — choose one according to your needs:
 
-### Cara A: `scripts/efws_ctl.sh` (cepat, untuk masih sering edit kode)
+### Method A: `scripts/efws_ctl.sh` (quick, for those who still edit code frequently)
 
 ```bash
 chmod +x scripts/efws_ctl.sh
-./scripts/efws_ctl.sh start      # jalankan
-./scripts/efws_ctl.sh status     # cek jalan/tidak + CPU/RAM
-./scripts/efws_ctl.sh logs       # tail log real-time (Ctrl+C cuma stop pantau, proses tetap jalan)
-./scripts/efws_ctl.sh restart    # WAJIB jalankan ini tiap kali update kode
-./scripts/efws_ctl.sh stop       # berhenti
+./scripts/efws_ctl.sh start      # run
+./scripts/efws_ctl.sh status     # cek running or not + CPU/RAM
+./scripts/efws_ctl.sh logs       # tail log real-time (Ctrl+C just stop monitoring, the process continues)
+./scripts/efws_ctl.sh restart    # MUST run on every update code
+./scripts/efws_ctl.sh stop       # stop
 ```
 
-### Cara B: systemd (disarankan untuk produksi — auto-start saat boot, auto-restart saat crash)
+### Method B: systemd (recommended for production — auto-start on boot, auto-restart on crash)
 
 ```bash
 sudo cp efws.service /etc/systemd/system/efws.service
 sudo systemctl daemon-reload
-sudo systemctl enable efws      # auto-start saat boot
-sudo systemctl start efws       # jalankan sekarang
+sudo systemctl enable efws      # auto-start when boot
+sudo systemctl start efws       # run now
 
-sudo systemctl status efws          # cek jalan/tidak
-sudo systemctl restart efws         # WAJIB jalankan ini tiap kali update kode
-sudo systemctl stop efws            # berhenti
+sudo systemctl status efws          # check run
+sudo systemctl restart efws         # MANDATORY to run this every time you update the code
+sudo systemctl stop efws            # stop
 sudo journalctl -u efws -f          # log sistem real-time
-tail -f logs/efws.log               # log aplikasi (lebih detail)
+tail -f logs/efws.log               # log aplication (more detail)
 ```
-
-`.env` dibaca otomatis lewat `EnvironmentFile=` di `efws.service` — jadi
-edit `.env` lalu `systemctl restart efws` cukup, tidak perlu sentuh file
-service lagi kecuali ganti path/user.
+`.env` is read automatically via `EnvironmentFile=` in `efws.service` — so editing `.env` and then `systemctl restart efws` is sufficient; there's no need to touch the service file again unless you change the path/user.
 
 ---
 
-## TAHAP 9 — Pindah dari webhook.site ke API produksi
+## STEP 9 — Moving from webhook.site to production API
 
-Setelah prototyping selesai dan backend asli sudah siap:
+Once prototyping is complete and the live backend is ready:
+
 ```bash
 nano .env
 # EFWS_API_URL=https://api-anda.com/api/v1/efws
-# EFWS_API_KEY=token_rahasia_anda   (jika backend pakai auth Bearer token)
+# EFWS_API_KEY=your_secret_token (if backend uses auth Bearer token)
 
-./scripts/efws_ctl.sh restart    # atau: sudo systemctl restart efws
+./scripts/efws_ctl.sh restart    # or: sudo systemctl restart efws
 ```
 
 ---
 
 ## Troubleshooting per komponen
 
-| Komponen | Gejala | Kemungkinan penyebab |
+| Component | Symptoms | Possible Causes |
 |----------|--------|------------------------|
-| MCP3008 | `test_mcp3008.py` gagal buka SPI | SPI belum aktif di raspi-config; `spidev` belum terinstall; wiring CLK/DOUT/DIN/CS salah |
-| MQ-2/MQ-135 | Nilai selalu mentok di angka sama (clipping) | Lupa pasang logic level converter di jalur analognya |
-| MQ-2/MQ-135 | Nilai ppm tidak masuk akal | Sensor belum preheat (butuh 24-48 jam untuk akurasi penuh) |
-| BME280 | `i2cdetect -y 1` tidak muncul 0x76 | I2C belum aktif; wiring SDA/SCL terbalik; alamat sebenarnya 0x77 (set `EFWS_BME280_ADDR=0x77`) |
-| Soil probe | moisture_percent selalu 0% atau 100% | Belum dikalibrasi (`dry_raw`/`wet_raw` di `sensors/soil.py`) |
-| Pressure sensor | `current_ma` selalu ~0, `fault_open_loop=True` | Loop putus/belum tersambung, atau PSU 12-24V loop belum nyala — jalankan `python3 tests/test_pressure.py` untuk diagnosis |
-| Pressure sensor | `depth_m` tidak masuk akal | `EFWS_PRESSURE_RANGE_M` belum disesuaikan datasheet sensor Anda |
-| Battery sensor | `voltage`/`percent` tidak masuk akal | `BATTERY_SENSOR_MAX_V`/`BATTERY_MAX_V`/`BATTERY_MIN_V` belum disesuaikan spesifikasi baterai |
-| Anemometer | Exception saat baca | Slave ID/register Modbus salah (cek datasheet unit Anda); wiring A/B terbalik |
-| A7670E | `AT` tidak merespons | Port salah (`ls /dev/ttyUSB*`), modul belum power-on, baudrate salah |
-| A7670E | GPS timeout terus | Antena GNSS belum terpasang/tidak ada langit terbuka; pastikan pakai `AT+CGNSSPWR` bukan `AT+CGPS` (sudah benar di kode ini) |
-| Relay/Sirine | Relay "klik" tapi sirine tidak bunyi | Sumber 12V belum tersambung; wiring COM/NO salah |
-| Relay/Sirine | Relay tidak "klik" sama sekali | `active_low` salah; GPIO pin di `.env` tidak sesuai wiring fisik |
-| API | `test_webhook_api.py` gagal kirim | Cek `ping 8.8.8.8` (internet jalan?); `EFWS_API_URL` masih placeholder |
+| MCP3008 | `test_mcp3008.py` fails to open SPI | PI is not enabled in raspi-config; spidev is not installed; incorrect CLK/DOUT/DIN/CS wiring |
+| BME280 | `i2cdetect -y 1` does not show 0x76 | I2C is not enabled; SDA/SCL wiring is reversed; actual address is 0x77 (set`EFWS_BME280_ADDR=0x77`)|
+| Pressure sensor | `current_ma` always ~0, `fault_open_loop=True` | The loop is disconnected/not connected, or the 12–24V loop PSU is not powered on — run `python3 tests/test_pressure.py` for diagnostics |
+| Pressure sensor | `depth_m` is unreasonable | `EFWS_PRESSURE_RANGE_M` has not been adjusted to match your sensors datasheet|
+| Battery sensor | `voltage`/`percent` doesnt make sence | `BATTERY_SENSOR_MAX_V`/`BATTERY_MAX_V`/`BATTERY_MIN_V` Not yet adjusted to battery specifications |
+| Anemometer | Exception when read | Incorrect Modbus slave ID/register (check your unit's datasheet); reversed A/B wiring |
+| A7670E | `AT` doesnt response| wrong salah (`ls /dev/ttyUSB*`),module not yet powered on, baudrate is incorrect |
+| A7670E | GPS always timeout | GNSS antenna not installed/no open sky; make sure to use it `AT+CGNSSPWR` not `AT+CGPS` (it's correct in this code) |
+| Relay/Sirine | Relay "click" bit sirine doesnt make soundd | 12V source not connected; COM/NO wiring incorrect|
+| Relay/Sirine | Relay doesnt "click" at all | `active_low` is wrong; GPIO pin in `.env` wiring  is not correct  |
+| API | `test_webhook_api.py` fails to send | Check `ping 8.8.8.8` (internet run?); `EFWS_API_URL` still on placeholder |
 | systemd | `status` → `failed` | `journalctl -u efws -n 50 --no-pager` untuk detail; biasanya modul Python belum terinstall di venv, atau `.env` tidak ditemukan |
