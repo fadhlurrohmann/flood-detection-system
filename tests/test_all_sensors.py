@@ -12,7 +12,7 @@ TESTS = [
     ("Soil moisture (dual)", "sensors.soil", "SoilMoistureSensor", "read"),
     ("Rainfall", "sensors.rainfall", "RainfallSensor", "read"),
     ("Ultrasonic distance", "sensors.JSN_SR04T", "JSN_SR04T", "read"),
-    ("Water flow", "sensors.YF-S201", "YFS201", "read_flow_rate"),
+    ("Water flow", "sensors.YF_S201", "YFS201", "read_flow_rate"),
 ]
 
 
