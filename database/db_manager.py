@@ -37,19 +37,24 @@ class DBManager:
         # Tidak ada kolom status/alarm/threshold — itu urusan backend.
         cur.execute("""
             CREATE TABLE IF NOT EXISTS sensor_readings (
-                id                INTEGER PRIMARY KEY AUTOINCREMENT,
-                timestamp         TEXT    NOT NULL,
-                device_id         TEXT    NOT NULL,
-
-                soil_surface_pct  REAL,
-                soil_deep_pct     REAL,
-                water_current_ma  REAL,
-                water_depth_m     REAL,
-                water_fault_open  INTEGER,
-                rainfall_mm       REAL,   -- accumulated rainfall since last reset/reading
-                rain_working_hrs  REAL,   -- sensor's cumulative operating time
-
-                full_payload      TEXT    -- JSON PERSIS yang dikirim ke API (untuk audit)
+                id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+                timestamp          TEXT    NOT NULL,
+                device_id          TEXT    NOT NULL,
+                temperature_c      REAL,   -- BME280
+                humidity_pct       REAL,
+                pressure_hpa   REAL,
+                wind_speed_ms      REAL,   -- anemometer
+                wind_direction     TEXT,
+                water_current_ma   REAL,   -- submersible pressure sensor
+                sps_depth_m  REAL,
+                pressure_bar REAL, 
+                fault_open_loop   INTEGER,
+                flow_rate    REAL,   -- YF-S201
+                jsn_depth_m  REAL,   -- JSN_SR04T
+                battery_voltage    REAL,   -- battery
+                battery_pct        REAL,
+                rainfall_delta_mm  REAL,   -- mm sejak telemetry SEBELUMNYA (bukan window 1 jam)
+                full_payload       TEXT    -- JSON PERSIS yang dikirim ke API (untuk audit)
             )
         """)
 
@@ -66,8 +71,26 @@ class DBManager:
             )
         """)
 
+        # Log setiap kali Location Publisher MENCOBA kirim (bukan cuma yang
+        # sukses -- kalau gagal & masuk api_queue, baris ini tetap ada,
+        # supaya riwayat "device pernah lapor posisi X pada waktu Y" tidak
+        # hilang, terpisah dari mekanisme retry queue).
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS location_log (
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                timestamp   TEXT    NOT NULL,
+                device_id   TEXT    NOT NULL,
+                latitude    REAL,
+                longitude   REAL,
+                source      TEXT,     -- "gps" atau "config" (fallback)
+                fix         INTEGER,  -- 1 kalau GPS benar-benar fix, 0 kalau fallback
+                full_payload TEXT     -- JSON PERSIS yang dikirim ke API (untuk audit)
+            )
+        """)
+
         cur.execute("CREATE INDEX IF NOT EXISTS idx_readings_ts ON sensor_readings(timestamp)")
         cur.execute("CREATE INDEX IF NOT EXISTS idx_queue_sent  ON api_queue(sent)")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_location_ts ON location_log(timestamp)")
 
         self.conn.commit()
 
@@ -75,36 +98,85 @@ class DBManager:
     def log_reading(self, data: dict, api_payload: dict) -> int:
         """
         Simpan satu siklus baca ke database SEBELUM dicoba dikirim ke API.
-        - data:        dict hasil EFWS._read_all() → {"soil":{"surface":{...},
-                       "deep":{...}}, "pressure":{...}}
+        - data:        dict hasil EFWS._read_all() → {BME280, pressure, YF-S201, JSN_SR04, battery}
         - api_payload: payload PERSIS yang akan dikirim ke API, disimpan utuh
                        di kolom full_payload untuk audit/pembanding dengan isi
-                       antrian offline.
+                       antrian offline. Kolom rainfall_delta_mm diambil dari
+                       SINI (bukan dihitung ulang dari data mentah), supaya
+                       nilainya PERSIS sama dengan yang benar-benar dikirim
+                       (main.py EFWS._rainfall_delta() adalah sumber kebenaran
+                       satu-satunya untuk nilai delta ini).
         Return: row id.
         """
-        soil     = data.get("soil", {})
+        
+        #sensors that built the data dictionary 
+        bme      = data.get("bme280", {})
+        wind     = data.get("wind", {})
         pressure = data.get("pressure", {})
-        rain = data.get("rain", {})
+        yf_s201 = data.get("yf_s201", {})
+        jsn_sr04t = data.get("jsn_sr04t", {})
+        battery  = data.get("battery", {})
+        rainfall_delta_mm = None
+        try:
+            rainfall_delta_mm = api_payload["telemetry"][0].get("rainfall")
+        except (KeyError, IndexError, TypeError):
+            pass
 
         cur = self.conn.cursor()
         cur.execute("""
             INSERT INTO sensor_readings (
                 timestamp, device_id,
-                soil_surface_pct, soil_deep_pct,
-                water_current_ma, water_depth_m, water_fault_open,
-                rainfall_mm, rain_working_hrs,
+                temperature_c, humidity_pct, pressure_hpa,
+                wind_speed_ms, wind_direction,
+                water_current_ma, sps_depth_m, pressure_bar, fault_open_loop,
+                flow_rate,
+                jsn_depth_m,
+                battery_voltage, battery_pct,
+                rainfall_delta_mm,
                 full_payload
             ) VALUES (
-                ?,?,  ?,?,  ?,?,?,  ?,?,  ?
+                ?,?,  ?,?,?,  ?,?,  ?,?,?,?, ?, ?, ?,?, ?, ?
             )
         """, (
             datetime.now(timezone.utc).isoformat(),
             settings.DEVICE_ID,
-            soil.get("surface", {}).get("moisture_percent"),
-            soil.get("deep", {}).get("moisture_percent"),
-            pressure.get("current_ma"), pressure.get("depth_m"),
+            
+            bme.get("temperature_c"), bme.get("humidity_percent"), bme.get("pressure_hpa"), #BME
+            wind.get("speed_ms"), data.get("wind_dir", {}).get("direction_abbr"), #anemometer
+            pressure.get("current_ma"), pressure.get("depth_m"), pressure.get("pressure_bar"), #submersible pressure
             int(bool(pressure.get("fault_open_loop", False))),
-            rain.get("rainfall_mm"), rain.get("working_time_hr"),
+            yf_s201.get("flow_rate"), #flow meter
+            jsn_sr04t.get("jsn_depth_m"), #ultrasonic distance
+            battery.get("voltage"), battery.get("percent"), #battery
+            rainfall_delta_mm,
+            json.dumps(api_payload, default=str),
+        ))
+        self.conn.commit()
+        return cur.lastrowid
+
+    # ─── Logging location (Location Publisher) ────────────────────
+    def log_location(self, location: dict, api_payload: dict) -> int:
+        """
+        Simpan setiap kali Location Publisher MENCOBA kirim -- terlepas dari
+        sukses/gagalnya pengiriman (kalau gagal, tetap tercatat di sini DAN
+        masuk api_queue lewat mekanisme retry terpisah).
+        - location:    dict {"lat", "lon", "source", "fix"} (self._location
+                       milik EFWS di main.py).
+        - api_payload: payload PERSIS yang dikirim ke API (untuk audit).
+        Return: row id.
+        """
+        cur = self.conn.cursor()
+        cur.execute("""
+            INSERT INTO location_log (
+                timestamp, device_id, latitude, longitude, source, fix, full_payload
+            ) VALUES (?, ?, ?, ?, ?, ?, ?)
+        """, (
+            datetime.now(timezone.utc).isoformat(),
+            settings.DEVICE_ID,
+            location.get("lat"),
+            location.get("lon"),
+            location.get("source"),
+            int(bool(location.get("fix", False))),
             json.dumps(api_payload, default=str),
         ))
         self.conn.commit()
@@ -156,9 +228,13 @@ class DBManager:
     def recent_readings(self, limit: int = 20) -> list:
         cur = self.conn.cursor()
         cur.execute("""
-            SELECT id, timestamp,
-                   soil_surface_pct, soil_deep_pct,
-                   water_depth_m, water_fault_open
+            SELECT  timestamp, device_id,
+                    temperature_c, humidity_pct, pressure_hpa,
+                    wind_speed_ms, wind_direction,
+                    water_current_ma, sps_depth_m, pressure_bar, fault_open_loop,
+                    flow_rate,
+                    jsn_depth_m,
+                    battery_voltage, battery_pct
             FROM   sensor_readings
             ORDER  BY id DESC LIMIT ?
         """, (limit,))
@@ -198,11 +274,15 @@ class DBManager:
         )
         deleted_queue = cur.rowcount
 
+        cur.execute("DELETE FROM location_log WHERE timestamp < ?", (cutoff,))
+        deleted_location = cur.rowcount
+
         self.conn.commit()
-        if deleted_readings or deleted_queue:
+        if deleted_readings or deleted_queue or deleted_location:
             self.conn.execute("VACUUM")  # kecilkan ukuran file .db setelah hapus
 
         return {
             "sensor_readings_deleted": deleted_readings,
             "api_queue_deleted": deleted_queue,
+            "location_log_deleted": deleted_location,
         }
