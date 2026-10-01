@@ -109,7 +109,7 @@ BATTERY_MIN_V        = _float("EFWS_BATTERY_MIN_V",         9.0)  # tegangan bat
 # ─── Submersible Pressure Sensor — loop 4-20mA ──────────────────────────────
 # Sensor loop-powered 2-kabel, dibaca via burden resistor presisi lalu LLC
 # (lihat sensors/pressure.py untuk detail kalkulasi & wiring).
-PRESSURE_BURDEN_OHM = _float("EFWS_PRESSURE_BURDEN_OHM", 56.8)  # 4mA→1V, 20mA→5V
+PRESSURE_BURDEN_OHM = _float("EFWS_PRESSURE_BURDEN_OHM", 100)  # 4mA→1V, 20mA→5V
 PRESSURE_MIN_MA     = _float("EFWS_PRESSURE_MIN_MA",       4.0)
 PRESSURE_MAX_MA     = _float("EFWS_PRESSURE_MAX_MA",      20.0)
 PRESSURE_RANGE_M    = _float("EFWS_PRESSURE_RANGE_M",      3.0)  # rentang penuh sensor, sesuaikan datasheet
@@ -126,6 +126,15 @@ GPIO_JSN_ECHO = _int("EWF_JSN_ECHO", 18)
 
 #------- YF-S201-------------
 GPIO_YF = _int("EWF_GPIO_YF", 16)
+
+# ─── RS485 wind-speed anemometer (Modbus RTU) ───────────────────────────────
+# Verify register address and scale against the specific anemometer datasheet.
+ANEMOMETER_PORT = _opt("EFWS_ANEM_PORT", "/dev/ttyUSB0")
+ANEMOMETER_BAUDRATE = _int("EFWS_ANEM_BAUDRATE", 9600)
+ANEMOMETER_SLAVE_ID = _int("EFWS_ANEM_SLAVE_ID", 1)
+ANEMOMETER_SPEED_REGISTER = int(_opt("EFWS_ANEM_SPEED_REGISTER", "0"), 0)
+ANEMOMETER_FUNCTION_CODE = _int("EFWS_ANEM_FUNCTION_CODE", 3)
+ANEMOMETER_SPEED_SCALE = _float("EFWS_ANEM_SPEED_SCALE", 0.1)
 
 # ─── A7670E / SIM7670E 4G LTE Cat-1 ──────────────────────────────────────────────────────────
 A7670E_AT_PORT  = _opt("EFWS_SIM_PORT", "/dev/ttyUSB2")
