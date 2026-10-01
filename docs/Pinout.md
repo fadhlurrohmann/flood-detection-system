@@ -23,8 +23,8 @@ Hardware final:
 | SPI MISO (MCP3008) | GPIO9  | Pin 21 | Data from MCP3008 |
 | SPI MOSI (MCP3008) | GPIO10 | Pin 19 | Data to MCP3008 |
 | SPI CE0  (MCP3008) | GPIO8  | Pin 24 | Chip Select |
-| I2C SDA (BME280)   | GPIO2  | Pin 3  | Data I2C |
-| I2C SCL (BME280)   | GPIO3  | Pin 5  | Clock I2C |
+| I2C SDA (BME280&SEN0575)   | GPIO2  | Pin 3  | Data I2C |
+| I2C SCL (BME280&SEN0575)   | GPIO3  | Pin 5  | Clock I2C |
 | Relay Siren (output) | GPIO27 | Pin 13 | To IN relay 5V |
 | Status LED (output, optional) | GPIO23 | Pin 16 | Indikator heartbeat |
 | 5V Rail | — | Pin 2 & 4 | Power LLC HV (do not from here If current large) |
