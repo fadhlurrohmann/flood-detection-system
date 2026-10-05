@@ -1,37 +1,38 @@
-# EFWS — out & Wiring Reference
+# EFWS — Output & Wiring Reference
 
-Hardware final:
+Final hardware:
 **Raspberry Pi 4 · MCP3008 (SPI ADC 8-ch) · 1x Logic Level Converter (min. 6-channel)
 · MQ-2 · MQ-135 · BME280 (I2C) · Soil Probe Surface · Soil Probe Deep
-· Submersible Pressure Sensor (loop 4-20mA) · Modul Sensor Tegangan DC 0-25V (baterai)
-· RS485 Anemometer · A7670E ATAU SIM7600 (auto-detect, hanya salah satu dipasang)
-· Relay 5V · Sirine 12V**
+· Submersible Pressure Sensor (4-20mA loop) · DC Voltage Sensor Module 0-25V (battery)
+· RS485 Anemometer · A7670E OR SIM7600 (auto-detect, only one installed)
+· 5V Relay · 12V Siren**
 
-> Tidak ada flame sensor di hardware ini. Tidak ada buzzer terpisah — cukup
-> satu relay + sirine (2 tingkat eskalasi lewat pola berdenyut vs nyala terus,
-> lihat `alarm/siren.py`). Threshold & keputusan alarm level dievaluasi lokal
-> HANYA untuk menyalakan sirine real-time — tidak disimpan ke database lokal,
-> karena evaluasi alarm "resmi" ada di backend.
+> There is no flame sensor in this hardware. There is no separate buzzer — a
+> single relay + siren is enough (2 alarm escalation levels via pulsing vs.
+> continuous-on pattern; see `alarm/siren.py`). Thresholds and alarm level
+> decisions are evaluated locally ONLY to trigger the siren in real time — they
+> are not stored in the local database because the official alarm evaluation occurs
+> in the backend.
 
 ---
 
-## 1. Raspberry Pi 4 — Pin yang Digunakan (BCM Numbering)
+## 1. Raspberry Pi 4 — Pins Used (BCM Numbering)
 
-| Fungsi | GPIO (BCM) | Pin Fisik | Keterangan |
-|--------|-----------|-----------|------------|
-| SPI SCLK (MCP3008) | GPIO11 | Pin 23 | Clock SPI |
-| SPI MISO (MCP3008) | GPIO9  | Pin 21 | Data dari MCP3008 |
-| SPI MOSI (MCP3008) | GPIO10 | Pin 19 | Data ke MCP3008 |
-| SPI CE0  (MCP3008) | GPIO8  | Pin 24 | Chip Select |
-| I2C SDA (BME280)   | GPIO2  | Pin 3  | Data I2C |
-| I2C SCL (BME280)   | GPIO3  | Pin 5  | Clock I2C |
-| Relay Sirine (output) | GPIO27 | Pin 13 | Ke IN relay 5V |
-| Status LED (output, opsional) | GPIO23 | Pin 16 | Indikator heartbeat |
-| 5V Rail | — | Pin 2 & 4 | Power LLC HV (jangan dari sini kalau arus besar) |
+| Function | GPIO (BCM) | Physical Pin | Notes |
+|----------|------------|--------------|-------|
+| SPI SCLK (MCP3008) | GPIO11 | Pin 23 | SPI clock |
+| SPI MISO (MCP3008) | GPIO9  | Pin 21 | Data from MCP3008 |
+| SPI MOSI (MCP3008) | GPIO10 | Pin 19 | Data to MCP3008 |
+| SPI CE0  (MCP3008) | GPIO8  | Pin 24 | Chip select |
+| I2C SDA (BME280)   | GPIO2  | Pin 3  | I2C data |
+| I2C SCL (BME280)   | GPIO3  | Pin 5  | I2C clock |
+| Siren Relay (output) | GPIO27 | Pin 13 | To 5V relay IN |
+| Status LED (output, optional) | GPIO23 | Pin 16 | Heartbeat indicator |
+| 5V Rail | — | Pin 2 & 4 | Power LLC HV (do not use this for high current) |
 | 3.3V Rail | — | Pin 1 & 17 | Power LLC LV, MCP3008 VDD/VREF, BME280 |
-| GND | — | Pin 6, 9, 14, 20, 25, 30, 34, 39 | Ground bersama |
+| GND | — | Pin 6, 9, 14, 20, 25, 30, 34, 39 | Shared ground |
 
-Aktifkan interface:
+Enable interfaces:
 ```bash
 sudo raspi-config
 # Interface Options → SPI → Yes
@@ -39,9 +40,9 @@ sudo raspi-config
 ```
 
 ---
+## 2. BME280 & Rainfall Sensors — I2C Wiring (ambient: temperature / humidity / pressure)
 
-## 2. BME280 — Wiring I2C (ambient: suhu / kelembaban / tekanan)
-
+### BME280 (ambient: suhu / kelembaban / tekanan)
 | Pin BME280 | Hubung ke |
 |-----------|-----------|
 | VIN | Pi 3.3V |
@@ -49,269 +50,274 @@ sudo raspi-config
 | SCL | GPIO3 (Pin 5) |
 | SDA | GPIO2 (Pin 3) |
 
-BME280 **tidak** lewat MCP3008/LLC — modul ini I2C native, langsung ke Pi.
+Alamat I2C: `0x76` (atau `0x77` tergantung solder jumper modul).
+
+### DFRobot Gravity Rainfall Sensor (SEN0575) — Tipping Bucket
+| Pin sensor | Hubung ke |
+|-----------|-----------|
+| VCC | Pi 3.3V |
+| GND | GND bersama |
+| SCL | GPIO3 (Pin 5) — **sama seperti BME280** |
+| SDA | GPIO2 (Pin 3) — **sama seperti BME280** |
+
+Alamat I2C: `0x1D` (`RAINFALL_I2C_ADDRESS` di `config/settings.py`) —
+**beda dari BME280 (`0x76`/`0x77`)**, jadi wiring paralel di bus I2C yang
+sama aman, tidak perlu multiplexer.
 
 ```bash
-i2cdetect -y 1     # harus muncul 0x76 (atau 0x77 kalau alamat berbeda)
+i2cdetect -y 1     # should show 0x76 (or 0x77 if address differs)
 python3 tests/test_bme280.py
 ```
 
 ---
 
-## 3. MCP3008 — Wiring ke Raspberry Pi
+## 3. MCP3008 — Wiring to Raspberry Pi
 
-| Pin MCP3008 | Hubung ke | Catatan |
-|-------------|-----------|---------|
-| VDD (pin 16) | Pi 3.3V | **JANGAN 5V** |
-| VREF (pin 15) | Pi 3.3V | Skala ADC 0-3.3V = raw 0-1023 |
-| AGND (pin 14) | GND bersama | |
+| MCP3008 Pin | Connect To | Notes |
+|-------------|------------|-------|
+| VDD (pin 16) | Pi 3.3V | **DO NOT USE 5V** |
+| VREF (pin 15) | Pi 3.3V | ADC scale 0-3.3V = raw 0-1023 |
+| AGND (pin 14) | Common GND | |
 | CLK (pin 13)  | GPIO11 (SCLK) | |
 | DOUT (pin 12) | GPIO9 (MISO)  | |
 | DIN (pin 11)  | GPIO10 (MOSI) | |
 | CS/SHDN (pin 10) | GPIO8 (CE0) | |
-| DGND (pin 9)  | GND bersama | |
-| CH0-CH5 | Lihat tabel channel di bawah | Semua lewat LLC |
-| CH6-CH7 | Spare, tidak dikabel | |
+| DGND (pin 9)  | Common GND | |
+| CH0-CH5 | See channel table below | All routed through LLC |
+| CH6-CH7 | Spare, not wired | |
 
-Verifikasi: `ls /dev/spidev*` → harus muncul `/dev/spidev0.0`
+Verification: `ls /dev/spidev*` → should show `/dev/spidev0.0`
 
 ---
 
-## 4. Peta Channel MCP3008 — SATU Logic Level Converter
+## 4. MCP3008 Channel Map — ONE Logic Level Converter
 
-Semua sinyal analog 0-5V **wajib** lewat LLC sebelum masuk MCP3008 (VREF 3.3V).
-Gunakan modul LLC minimal 6-channel bidirectional (mis. modul 8-channel TXS0108E —
-lebih umum dijual dan menyisakan 2 channel untuk ekspansi).
+All 0-5V analog signals **must** pass through the LLC before entering the MCP3008 (VREF 3.3V).
+Use a bidirectional LLC module with at least 6 channels (for example, an 8-channel TXS0108E module — more commonly sold and leaves 2 channels for expansion).
 
-| LLC | Sisi HV (5V) ← dari sensor | Sisi LV (3.3V) → ke MCP3008 | Channel |
+| LLC | HV Side (5V) ← from sensor | LV Side (3.3V) → to MCP3008 | Channel |
 |-----|---------------------------|------------------------------|---------|
 | HV-1 / LV-1 | YF-S201 **AOUT** | NONE | water flow digital |
-| HV-2 / LV-2 | MQ-135 **AOUT** | **CH1** | Air quality analog |
-| HV-3 / LV-3 | Soil Surface **AOUT** | **CH2** | Kelembaban 0-30cm |
-| HV-4 / LV-4 | Soil Deep **AOUT** | **CH3** | Kelembaban 30-60cm |
-| HV-5 / LV-5 | Pressure sensor (via **R_BURDEN**) | **CH4** | Ketinggian air (loop 4-20mA) |
-| HV-6 / LV-6 | Voltage Sensor Module **OUT** | **CH5** | Tegangan baterai (0-25V) |
-| HV-7..8 / LV-7..8 | *(spare / ekspansi)* | CH6-CH7 | — |
+|manual RESISTOR | Pressure sensor (via **R_BURDEN**) |  **CH1** | Water level (4-20mA loop) | Re
+| HV-6 / LV-6 | Voltage Sensor Module **OUT** | **CH2** | Battery voltage (0-25V) |
+| HV-7..8 / LV-7..8 | *(spare / expansion)* | CH3-CH7 | — |
 
-### Wiring modul LLC
+### LLC Module Wiring
 
 ```
 LLC:
-  HV  pin  ←── 5V  (dari buck converter / Pi pin 2/4)
-  LV  pin  ←── 3.3V (dari Pi pin 1/17)
-  GND HV   ←── GND bersama
-  GND LV   ←── GND bersama
+  HV  pin  ←── 5V  (from buck converter / Pi pin 2/4)
+  LV  pin  ←── 3.3V (from Pi pin 1/17)
+  GND HV   ←── common ground
+  GND LV   ←── common ground
 ```
 
 ---
 
-## 5. Sensor per Sensor — Detail Wiring
+## 5. Sensor-by-Sensor Wiring Details
 
 ### MQ-2 (Smoke / Combustible Gas)
-| Pin sensor | Hubung ke |
-|-----------|-----------|
-| VCC | 5V (langsung dari sumber, bukan dari Pi GPIO 5V) |
-| GND | GND bersama |
+| Sensor pin | Connect to |
+|-----------|------------|
+| VCC | 5V (directly from source, not from Pi GPIO 5V) |
+| GND | Common ground |
 | AOUT | LLC **HV-1** → LV-1 → MCP3008 **CH0** |
 
-> Heater ~150mA — power langsung dari buck converter, jangan dari Pi GPIO 5V.
+> Heater ~150mA — power directly from buck converter, not from Pi GPIO 5V.
 
-### YF-S201 (Water flow sensor)
-| Pin sensor | Hubung ke |
-|-----------|-----------|
-| VCC | 5V (langsung dari sumber) |
-| GND | GND bersama |
+### YF-S201 (Water Flow Sensor)
+| Sensor pin | Connect to |
+|-----------|------------|
+| VCC | 5V (directly from source) |
+| GND | Common ground |
 | AOUT | LLC **HV-1** → LV-1 → MCP3008 |
 
 ### Soil Moisture Probe — Surface (0-30cm)
-| Pin probe | Hubung ke |
-|----------|-----------|
+| Probe pin | Connect to |
+|-----------|------------|
 | VCC | 5V |
-| GND | GND bersama |
+| GND | Common ground |
 | AOUT | LLC **HV-3** → LV-3 → MCP3008 **CH2** |
 
 ### Soil Moisture Probe — Deep (30-60cm)
-| Pin probe | Hubung ke |
-|----------|-----------|
+| Probe pin | Connect to |
+|-----------|------------|
 | VCC | 5V |
-| GND | GND bersama |
+| GND | Common ground |
 | AOUT | LLC **HV-4** → LV-4 → MCP3008 **CH3** |
 
-> Kalibrasi wajib per probe (lihat `sensors/soil.py`): dry_raw di udara kering, wet_raw terendam air.
+> Per-probe calibration is required (see `sensors/soil.py`): `dry_raw` in dry air, `wet_raw` submerged in water.
 
-### Submersible Pressure Sensor — loop 4-20mA (Ketinggian Air)
+### Submersible Pressure Sensor — 4-20mA loop (Water Level)
 
-Sensor ini **loop-powered 2-kabel** (bukan 0-5V langsung), jadi wiring-nya beda
-dari sensor lain: butuh **burden resistor** presisi untuk mengubah arus loop
-menjadi tegangan yang bisa dibaca ADC.
+This sensor is a **2-wire loop-powered device** (not a direct 0-5V sensor), so its wiring differs from other sensors: it requires a precise **burden resistor** to convert the loop current into a voltage readable by the ADC.
 
 ```
 PSU 12-24V (+) ──────────► Sensor Loop V+
                                   │
-                    Sensor (variabel 4-20mA sesuai tekanan/kedalaman)
+                    Sensor (variable 4-20mA depending on pressure/depth)
                                   │
                                   ▼
                     ┌─────────────────────────┐
                     │  R_BURDEN = 250Ω 0.1%   │
-                    │  (presisi, low-drift)   │
+                    │  (precision, low-drift)  │
                     └────────────┬────────────┘
-                                 │ tap di titik ini →  0-5V
+                                 │ tap here →  0-5V
                                  ▼
-                      LLC HV-5 (5V sisi)
+                      LLC HV-5 (5V side)
                                  │ level shift
-                      LLC LV-5 (3.3V sisi)
+                      LLC LV-5 (3.3V side)
                                  │
                        MCP3008 CH4
                                  │
-PSU 12-24V (−) ──────────► GND bersama (setelah R_BURDEN)
+PSU 12-24V (−) ──────────► common ground (after R_BURDEN)
 ```
 
-| Titik | Hubung ke |
-|-------|-----------|
-| Loop V+ | PSU 12-24V (+) — **bukan** dari Pi/buck converter 5V |
-| Loop keluar (setelah sensor) | Ujung atas R_BURDEN (250Ω, 0.1%) |
-| Ujung bawah R_BURDEN | GND bersama & PSU (−) |
-| Titik sambung sensor/R_BURDEN | LLC **HV-5** → LV-5 → MCP3008 **CH4** |
+| Point | Connect to |
+|-------|------------|
+| Loop V+ | PSU 12-24V (+) — **not** from Pi/buck converter 5V |
+| Loop output (after sensor) | Top of R_BURDEN (250Ω, 0.1%) |
+| Bottom of R_BURDEN | Common ground & PSU (−) |
+| Sensor/R_BURDEN connection point | LLC **HV-5** → LV-5 → MCP3008 **CH4** |
 
-**Kenapa 250Ω persis?**
-- 4mA × 250Ω = **1.0V** → level "kosong" (0m)
-- 20mA × 250Ω = **5.0V** → level "penuh" (`PRESSURE_RANGE_M`, default 5m — sesuaikan datasheet sensor Anda)
+**Why 250Ω exactly?**
+- 4mA × 250Ω = **1.0V** → "empty" level (0m)
+- 20mA × 250Ω = **5.0V** → "full" level (`PRESSURE_RANGE_M`, default 5m — adjust to your sensor datasheet)
 
-Formula konversi ada di `sensors/pressure.py`. **Sesuaikan** `EFWS_PRESSURE_RANGE_M`
-di `.env` dengan rentang kedalaman/tekanan sensor fisik Anda (banyak varian: 0-5m,
-0-10m, 0-20m). Payload API mengirim dua nilai dari sensor ini: `waterLevel` (meter)
-dan `waterLevelCurrentMa` (arus loop mentah, berguna buat backend mendeteksi loop
-putus — nilai mendadak jatuh ke ~0mA berarti kabel putus, bukan air kosong).
+The conversion formula is in `sensors/pressure.py`. **Adjust** `EFWS_PRESSURE_RANGE_M`
+in `.env` to match the physical sensor depth/pressure range (many variants: 0-5m,
+0-10m, 0-20m). The API payload sends two values from this sensor: `waterLevel` (meters)
+and `waterLevelCurrentMa` (raw loop current, useful for the backend to detect a loop break — a sudden drop to ~0mA means a broken cable, not empty water).
 
-### Modul Sensor Tegangan DC 0-25V (Baterai)
+### DC Voltage Sensor Module 0-25V (Battery)
 
-Modul ini sudah punya voltage divider internal (tidak perlu buat sendiri).
+This module already includes an internal voltage divider (no need to build one yourself).
 
-| Pin modul | Hubung ke |
-|-----------|-----------|
-| IN+ | Terminal Battery+ (12V LiFePO4/sejenis) |
-| IN− | Terminal Battery− |
-| GND (sisi output) | GND bersama |
-| S (output, 0-5V proporsional 0-25V) | LLC **HV-6** → LV-6 → MCP3008 **CH5** |
+| Module pin | Connect to |
+|------------|------------|
+| IN+ | Battery+ terminal (12V LiFePO4 or similar) |
+| IN− | Battery− terminal |
+| GND (output side) | Common ground |
+| S (output, 0-5V proportional to 0-25V) | LLC **HV-6** → LV-6 → MCP3008 **CH5** |
 
-Formula konversi ada di `sensors/battery.py`. Kalibrasi `BATTERY_MAX_V` /
-`BATTERY_MIN_V` di `.env` sesuai spesifikasi baterai Anda (default 12.6V penuh,
-9.0V kosong, cocok untuk pack 3S LiFePO4).
+The conversion formula is in `sensors/battery.py`. Calibrate `BATTERY_MAX_V` /
+`BATTERY_MIN_V` in `.env` according to your battery specification (default 12.6V full,
+9.0V empty, suitable for 3S LiFePO4 packs).
 
 ### RS485 Anemometer (Modbus RTU)
-| Koneksi | Hubung ke |
-|---------|-----------|
+| Connection | Connect to |
+|-----------|------------|
 | A (D+) | USB-RS485 converter terminal A |
 | B (D−) | USB-RS485 converter terminal B |
-| VCC | 12V atau 5V sesuai datasheet unit |
-| GND | GND bersama |
+| VCC | 12V or 5V depending on unit datasheet |
+| GND | Common ground |
 
-USB-RS485 → port USB Pi → muncul sebagai `/dev/ttyUSB0`. **Tidak perlu LLC.**
+USB-RS485 → Pi USB port → appears as `/dev/ttyUSB0`. **No LLC required.**
 
-### A7670E ATAU SIM7600 (pilih salah satu)
+### A7670E OR SIM7600 (choose one)
 
-Tidak perlu wiring berbeda antara keduanya — **hanya pasang salah satu modul**,
-`communication/sim_detector.py` akan auto-detect mana yang terpasang
-(`AT+CGNSSPWR` → A7670E, `AT+CGPS` → SIM7600) dan software menyesuaikan sendiri.
+No different wiring is required between them — **install only one module**,
+`communication/sim_detector.py` will auto-detect which one is present
+(`AT+CGNSSPWR` → A7670E, `AT+CGPS` → SIM7600) and the software adapts automatically.
 
-| Koneksi | Detail |
-|---------|--------|
-| Power | Sesuai board HAT (biasanya 5V dari Pi atau 3.7-4.2V Li-ion terpisah) |
-| Data | USB ke Pi — muncul sebagai beberapa `/dev/ttyUSBx` |
-| Antena LTE | Wajib |
-| Antena GNSS | Wajib terpisah |
-| SIM card | Pasang sebelum power-on |
+| Connection | Details |
+|-----------|---------|
+| Power | Depends on the HAT board (usually 5V from the Pi or separate 3.7-4.2V Li-ion) |
+| Data | USB to Pi — appears as one of several `/dev/ttyUSBx` |
+| LTE antenna | Required |
+| GNSS antenna | Required separately |
+| SIM card | Install before power-on |
 
 ```bash
 ls /dev/ttyUSB*
-python3 tests/test_sim_detector.py   # konfirmasi modul mana yang terdeteksi
+python3 tests/test_sim_detector.py   # confirm which modem is detected
 ```
 
-### Relay 5V → Sirine 12V
+### 5V Relay → 12V Siren
 
 ```
-Sisi kontrol (Pi 3.3V GPIO):          Sisi daya tinggi (12V):
+Control side (Pi 3.3V GPIO):          High-power side (12V):
   GPIO27 ──────────────► IN relay       Battery+ ─── relay COM
-  5V     ──────────────► VCC relay            Relay NO ─── Sirine (+)
-  GND    ──────────────► GND relay            Sirine (−) ─── Battery−
+  5V     ──────────────► VCC relay            Relay NO ─── Siren (+)
+  GND    ──────────────► GND relay            Siren (−) ─── Battery−
 ```
 
-> ⚠️ Jalur 12V sirine **tidak pernah** boleh menyentuh pin Pi manapun.
-> Tidak ada buzzer terpisah — satu relay ini menangani 2 tingkat eskalasi
-> (WARNING = berdenyut pelan, CRITICAL = nyala terus), lihat `alarm/siren.py`.
+> ⚠️ The 12V siren line **must never** touch any Pi pin.
+> There is no separate buzzer — this relay handles 2 escalation levels
+> (WARNING = slow pulse, CRITICAL = constant on), see `alarm/siren.py`.
 
 ---
 
-## 6. Diagram Blok Sinyal Lengkap
+## 6. Complete Signal Block Diagram
 
 ```
 MQ-2 AOUT (5V)      ──┐
 MQ-135 AOUT (5V)    ──┤
-Soil-S AOUT (5V)    ──┤    LLC (1 modul, 6 channel dipakai)
+Soil-S AOUT (5V)    ──┤    LLC (1 module, 6 channels used)
 Soil-D AOUT (5V)    ──┤    HV1-6 (5V) → LV1-6 (3.3V)
 Pressure via R_BURDEN─┤
 Battery Sensor OUT  ──┘         │
                                 ▼
                      MCP3008 CH0-CH5  (SPI0)
                                 │
-BME280 (I2C langsung) ──────────┤
-RS485 Anemometer (USB) ─────────┤
-A7670E / SIM7600 (USB) ─────────┤
+BME280 (I2C direct) ─────────────┤
+RS485 Anemometer (USB) ──────────┤
+A7670E / SIM7600 (USB) ──────────┤
                                 ▼
                        Raspberry Pi 4 — main.py
-                       1) baca semua sensor
-                       2) SIMPAN ke SQLite dulu (sensor_readings)
-                       3) evaluasi lokal → sirine (real-time, tidak disimpan)
-                       4) coba kirim ke API — gagal? masuk antrian (api_queue)
-                       5) cek sinyal ulang tiap 2 menit → auto-flush antrian
+                       1) read all sensors
+                       2) SAVE to SQLite first (sensor_readings)
+                       3) local evaluation → siren (real-time, not stored)
+                       4) try to send to API — fail? queue it (api_queue)
+                       5) re-check signal every 2 minutes → auto-flush queue
                                 │ GPIO27
                                 ▼
-                        Relay 5V ──► Sirine 12V
+                        5V Relay ──► 12V Siren
 ```
 
 ---
 
-## 7. Catu Daya Tiap Beban
+## 7. Power Supply for Each Load
 
-| Beban | Tegangan | Sumber | Catatan |
-|-------|---------|--------|---------|
-| Raspberry Pi 4 | 5V | Buck converter output | Via GPIO pin 2/4 atau USB-C |
+| Load | Voltage | Source | Notes |
+|------|---------|--------|-------|
+| Raspberry Pi 4 | 5V | Buck converter output | Via GPIO pins 2/4 or USB-C |
 | MCP3008 VDD/VREF | 3.3V | Pi 3.3V rail | |
-| BME280 | 3.3V | Pi 3.3V rail | I2C langsung, tanpa LLC |
+| BME280 | 3.3V | Pi 3.3V rail | I2C direct, no LLC |
 | LLC LV | 3.3V | Pi 3.3V rail | |
 | LLC HV | 5V | Buck converter / Pi 5V rail | |
-| MQ-2 / MQ-135 heater | 5V | Buck converter langsung | ~150mA masing-masing |
-| Soil probe ×2 | 5V atau 3.3V | Sesuai datasheet probe | |
-| Submersible pressure sensor | 12-24V (loop) | **PSU terpisah**, bukan dari Pi/buck 5V | Loop-powered |
-| Modul sensor tegangan (battery) | Pasif, tap dari Battery+/− | — | Tidak perlu suplai terpisah |
-| RS485 anemometer | 12V atau 5V | Sesuai datasheet unit | |
-| A7670E/SIM7600 | 5V atau 3.7-4.2V | Sesuai board HAT | |
+| MQ-2 / MQ-135 heater | 5V | Buck converter directly | ~150mA each |
+| Soil probes ×2 | 5V or 3.3V | According to sensor datasheet | |
+| Submersible pressure sensor | 12-24V (loop) | **Separate PSU**, not from Pi/buck 5V | Loop-powered |
+| Voltage sensor module (battery) | Passive, tapped from Battery+/− | — | No separate supply needed |
+| RS485 anemometer | 12V or 5V | According to unit datasheet | |
+| A7670E/SIM7600 | 5V or 3.7-4.2V | According to HAT board | |
 | Relay coil | 5V | Pi 5V rail | |
-| Sirine | 12V | Battery (via relay NO/COM) | |
+| Siren | 12V | Battery (via relay NO/COM) | |
 
 ---
 
-## 8. Checklist Sebelum Power-On Pertama
+## 8. Checklist Before First Power-On
 
 ```
-[ ] SPI aktif (raspi-config → Interface → SPI)
-[ ] I2C aktif (raspi-config → Interface → I2C)
-[ ] Common ground: Pi, MCP3008, LLC, semua sensor, relay, PSU pressure sensor → satu GND
-[ ] LLC: HV=5V, LV=3.3V, 6 channel dari sensor terhubung (CH0-CH5)
-[ ] MCP3008 VDD & VREF ke 3.3V (bukan 5V)
-[ ] R_BURDEN 250Ω terpasang benar di loop pressure sensor, tap ke LLC HV-5
-[ ] PSU loop pressure sensor terpisah dari Pi/buck converter 5V
-[ ] Modul sensor tegangan tap langsung ke Battery+/− (bukan lewat relay)
-[ ] Jalur 12V sirine hanya lewat relay COM/NO, tidak menyentuh Pi
-[ ] Hanya SATU modul terpasang: A7670E ATAU SIM7600 (jangan dua-duanya)
-[ ] Antena LTE + GNSS terpasang
-[ ] SIM card terpasang sebelum modul dinyalakan
+[ ] SPI enabled (raspi-config → Interface → SPI)
+[ ] I2C enabled (raspi-config → Interface → I2C)
+[ ] Common ground: Pi, MCP3008, LLC, all sensors, relay, pressure PSU → one GND
+[ ] LLC: HV=5V, LV=3.3V, 6 channels connected from sensors (CH0-CH5)
+[ ] MCP3008 VDD & VREF to 3.3V (not 5V)
+[ ] R_BURDEN 250Ω installed correctly in the pressure sensor loop, tapped to LLC HV-5
+[ ] Pressure sensor PSU isolated from Pi/buck converter 5V
+[ ] Voltage sensor module taps directly to Battery+/− (not through relay)
+[ ] 12V siren path only through relay COM/NO, never touching Pi pins
+[ ] Only ONE module installed: A7670E OR SIM7600 (do not install both)
+[ ] LTE + GNSS antennas installed
+[ ] SIM card installed before turning on the module
 
-Verifikasi software:
-[ ] ls /dev/spidev*    → /dev/spidev0.0 ada
-[ ] i2cdetect -y 1     → alamat BME280 (0x76/0x77) muncul
-[ ] ls /dev/ttyUSB*    → beberapa port ada (modem + anemometer)
-[ ] python3 tests/test_all_sensors.py     → semua sensor OK
-[ ] python3 tests/test_offline_queue_integrity.py → integritas queue OK
-[ ] python3 tests/test_sim_detector.py    → modul SIM teridentifikasi
+Software verification:
+[ ] ls /dev/spidev*    → /dev/spidev0.0 present
+[ ] i2cdetect -y 1     → BME280 address appears (0x76/0x77)
+[ ] ls /dev/ttyUSB*    → multiple ports present (modem + anemometer)
+[ ] python3 tests/test_all_sensors.py     → all sensors OK
+[ ] python3 tests/test_offline_queue_integrity.py → queue integrity OK
+[ ] python3 tests/test_sim_detector.py    → SIM module identified
 ```
