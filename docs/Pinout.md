@@ -2,7 +2,7 @@
 
 Final hardware:
 **Raspberry Pi 4 · MCP3008 (SPI ADC 8-ch) · 1x Logic Level Converter (min. 6-channel)
-· MQ-2 · MQ-135 · BME280 (I2C) · Soil Probe Surface · Soil Probe Deep
+· MQ-2 · MQ-135 · BME280 (I2C)
 · Submersible Pressure Sensor (4-20mA loop) · DC Voltage Sensor Module 0-25V (battery)
 · RS485 Anemometer · A7670E OR SIM7600 (auto-detect, only one installed)
 · 5V Relay · 12V Siren**
@@ -98,9 +98,9 @@ Use a bidirectional LLC module with at least 6 channels (for example, an 8-chann
 | LLC | HV Side (5V) ← from sensor | LV Side (3.3V) → to MCP3008 | Channel |
 |-----|---------------------------|------------------------------|---------|
 | HV-1 / LV-1 | YF-S201 **AOUT** | NONE | water flow digital |
-|manual RESISTOR | Pressure sensor (via **R_BURDEN**) |  **CH1** | Water level (4-20mA loop) | Re
-| HV-6 / LV-6 | Voltage Sensor Module **OUT** | **CH2** | Battery voltage (0-25V) |
-| HV-7..8 / LV-7..8 | *(spare / expansion)* | CH3-CH7 | — |
+|manual RESISTOR | Pressure sensor (via **R_BURDEN**) |  **CH2** | Water level (4-20mA loop) | Re
+| HV-3 / LV-3 | Voltage Sensor Module **OUT** | **CH3** | Battery voltage (0-25V) |
+| HV-7..8 / LV-7..8 | *(spare / expansion)* | CH0, CH1, CH4-CH7 | — |
 
 ### LLC Module Wiring
 
@@ -132,22 +132,6 @@ LLC:
 | GND | Common ground |
 | AOUT | LLC **HV-1** → LV-1 → MCP3008 |
 
-### Soil Moisture Probe — Surface (0-30cm)
-| Probe pin | Connect to |
-|-----------|------------|
-| VCC | 5V |
-| GND | Common ground |
-| AOUT | LLC **HV-3** → LV-3 → MCP3008 **CH2** |
-
-### Soil Moisture Probe — Deep (30-60cm)
-| Probe pin | Connect to |
-|-----------|------------|
-| VCC | 5V |
-| GND | Common ground |
-| AOUT | LLC **HV-4** → LV-4 → MCP3008 **CH3** |
-
-> Per-probe calibration is required (see `sensors/soil.py`): `dry_raw` in dry air, `wet_raw` submerged in water.
-
 ### Submersible Pressure Sensor — 4-20mA loop (Water Level)
 
 This sensor is a **2-wire loop-powered device** (not a direct 0-5V sensor), so its wiring differs from other sensors: it requires a precise **burden resistor** to convert the loop current into a voltage readable by the ADC.
@@ -159,16 +143,12 @@ PSU 12-24V (+) ──────────► Sensor Loop V+
                                   │
                                   ▼
                     ┌─────────────────────────┐
-                    │  R_BURDEN = 250Ω 0.1%   │
+                    │  R_BURDEN = 100Ω 0.1%   │
                     │  (precision, low-drift)  │
                     └────────────┬────────────┘
-                                 │ tap here →  0-5V
+                                 │ tap here →  0.4-2.0V
                                  ▼
-                      LLC HV-5 (5V side)
-                                 │ level shift
-                      LLC LV-5 (3.3V side)
-                                 │
-                       MCP3008 CH4
+                       MCP3008 CH2  (direct, NO LLC)
                                  │
 PSU 12-24V (−) ──────────► common ground (after R_BURDEN)
 ```
@@ -176,13 +156,15 @@ PSU 12-24V (−) ──────────► common ground (after R_BURDEN
 | Point | Connect to |
 |-------|------------|
 | Loop V+ | PSU 12-24V (+) — **not** from Pi/buck converter 5V |
-| Loop output (after sensor) | Top of R_BURDEN (250Ω, 0.1%) |
+| Loop output (after sensor) | Top of R_BURDEN (100Ω, 0.1%) |
 | Bottom of R_BURDEN | Common ground & PSU (−) |
-| Sensor/R_BURDEN connection point | LLC **HV-5** → LV-5 → MCP3008 **CH4** |
+| Sensor/R_BURDEN connection point | MCP3008 **CH2** directly (no LLC) |
 
-**Why 250Ω exactly?**
-- 4mA × 250Ω = **1.0V** → "empty" level (0m)
-- 20mA × 250Ω = **5.0V** → "full" level (`PRESSURE_RANGE_M`, default 5m — adjust to your sensor datasheet)
+**Why 100Ω?**
+- 4mA × 100Ω = **0.4V** → "empty" level (0m)
+- 20mA × 100Ω = **2.0V** → "full" level (`PRESSURE_RANGE_M` — adjust to your sensor datasheet)
+- 2.0V max stays below the MCP3008 VREF (3.3V), so the signal goes straight to CH2 without the LLC.
+  `EFWS_PRESSURE_BURDEN_OHM` in `.env` must match the installed resistor (default 100).
 
 The conversion formula is in `sensors/pressure.py`. **Adjust** `EFWS_PRESSURE_RANGE_M`
 in `.env` to match the physical sensor depth/pressure range (many variants: 0-5m,
@@ -196,9 +178,9 @@ This module already includes an internal voltage divider (no need to build one y
 | Module pin | Connect to |
 |------------|------------|
 | IN+ | Battery+ terminal (12V LiFePO4 or similar) |
-| IN− | Battery− terminal |
+| IN− | Battery− **after the BMS (P−)** — not the raw cell negative (B−) |
 | GND (output side) | Common ground |
-| S (output, 0-5V proportional to 0-25V) | LLC **HV-6** → LV-6 → MCP3008 **CH5** |
+| S (output, 0-5V proportional to 0-25V) | LLC **HV-3** → LV-3 → MCP3008 **CH3** |
 
 The conversion formula is in `sensors/battery.py`. Calibrate `BATTERY_MAX_V` /
 `BATTERY_MIN_V` in `.env` according to your battery specification (default 12.6V full,
@@ -251,14 +233,10 @@ Control side (Pi 3.3V GPIO):          High-power side (12V):
 ## 6. Complete Signal Block Diagram
 
 ```
-MQ-2 AOUT (5V)      ──┐
-MQ-135 AOUT (5V)    ──┤
-Soil-S AOUT (5V)    ──┤    LLC (1 module, 6 channels used)
-Soil-D AOUT (5V)    ──┤    HV1-6 (5V) → LV1-6 (3.3V)
-Pressure via R_BURDEN─┤
-Battery Sensor OUT  ──┘         │
+Battery Sensor S    ──►  LLC HV-3 (5V) → LV-3 (3.3V) ──┐
+Pressure via R_BURDEN (0.4-2.0V, direct) ─────────────┤
                                 ▼
-                     MCP3008 CH0-CH5  (SPI0)
+                     MCP3008 CH2-CH3  (SPI0)
                                 │
 BME280 (I2C direct) ─────────────┤
 RS485 Anemometer (USB) ──────────┤
@@ -287,7 +265,6 @@ A7670E / SIM7600 (USB) ──────────┤
 | LLC LV | 3.3V | Pi 3.3V rail | |
 | LLC HV | 5V | Buck converter / Pi 5V rail | |
 | MQ-2 / MQ-135 heater | 5V | Buck converter directly | ~150mA each |
-| Soil probes ×2 | 5V or 3.3V | According to sensor datasheet | |
 | Submersible pressure sensor | 12-24V (loop) | **Separate PSU**, not from Pi/buck 5V | Loop-powered |
 | Voltage sensor module (battery) | Passive, tapped from Battery+/− | — | No separate supply needed |
 | RS485 anemometer | 12V or 5V | According to unit datasheet | |
@@ -303,9 +280,9 @@ A7670E / SIM7600 (USB) ──────────┤
 [ ] SPI enabled (raspi-config → Interface → SPI)
 [ ] I2C enabled (raspi-config → Interface → I2C)
 [ ] Common ground: Pi, MCP3008, LLC, all sensors, relay, pressure PSU → one GND
-[ ] LLC: HV=5V, LV=3.3V, 6 channels connected from sensors (CH0-CH5)
+[ ] LLC: HV=5V, LV=3.3V, battery sensor S on HV-3 → LV-3 → CH3
 [ ] MCP3008 VDD & VREF to 3.3V (not 5V)
-[ ] R_BURDEN 250Ω installed correctly in the pressure sensor loop, tapped to LLC HV-5
+[ ] R_BURDEN 100Ω installed correctly in the pressure sensor loop, tapped directly to MCP3008 CH2
 [ ] Pressure sensor PSU isolated from Pi/buck converter 5V
 [ ] Voltage sensor module taps directly to Battery+/− (not through relay)
 [ ] 12V siren path only through relay COM/NO, never touching Pi pins

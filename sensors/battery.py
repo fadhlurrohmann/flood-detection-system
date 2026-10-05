@@ -1,6 +1,6 @@
 """
 Modul Sensor Tegangan DC 0-25V — monitoring baterai (voltage divider bawaan modul).
-Lewat MCP3008 CH5 via Logic Level Converter yang sama dengan sensor analog lain.
+Lewat MCP3008 CH3 via Logic Level Converter (HV-3 → LV-3).
 
 Input : terhubung langsung ke terminal Battery+ dan Battery-
 Output: pin S → 0-5V proporsional terhadap tegangan input (0-25V)

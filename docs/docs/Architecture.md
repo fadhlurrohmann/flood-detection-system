@@ -13,8 +13,8 @@
 ├──────────────┤  SPI    │      (main.py orchestrator)│
 │LLC ->        │◄───────►│                            │   GPIO I  ┌────────────┐
 │  MCP3008 ADC │         │                            │◄──────────│ JSN-SR04T  │
-│ (Soil x2/    │         │                            │           │ YF-S201    │
-│  Pressure/   │         │                            │           │  (digital) │
+│ (Pressure/   │         │                            │           │ YF-S201    │
+│              │         │                            │           │  (digital) │
 │  Battery)    │         │                            │           └────────────┘
 └──────────────┘         │                            │
 ┌──────────────┐  USB    │                            │  USB/UART  ┌─────────────┐

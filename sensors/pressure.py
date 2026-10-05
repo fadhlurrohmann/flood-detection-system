@@ -6,16 +6,16 @@ Configuration:
 - MCP3008
 - Raspberry Pi
 - WITHOUT Logic Level Converter
-- Burden resistor = 56.9 Ohm
+- Burden resistor = 100 Ohm
 - ADC Reference = 3.3V
 
 Voltage produced:
 
 4mA
-0.228V
+0.4V
 
 20mA
-1.138V
+2.0V
 
 Safe for MCP3008.
 """

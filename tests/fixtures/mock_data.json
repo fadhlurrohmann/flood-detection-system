@@ -10,7 +10,6 @@
         "smokeLevel": 9.49,
         "temp": 29.23,
         "humidity": 61.95,
-        "soilMoisture": 61.23,
         "batteryLevel": 85.0,
         "flameDetected": false,
         "windSpeed": 2.33
@@ -28,7 +27,6 @@
         "smokeLevel": 9.34,
         "temp": 29.17,
         "humidity": 63.02,
-        "soilMoisture": 57.72,
         "batteryLevel": 85.0,
         "flameDetected": false,
         "windSpeed": 2.52
@@ -46,7 +44,6 @@
         "smokeLevel": 9.68,
         "temp": 29.86,
         "humidity": 61.13,
-        "soilMoisture": 61.48,
         "batteryLevel": 85.0,
         "flameDetected": false,
         "windSpeed": 2.36
@@ -64,7 +61,6 @@
         "smokeLevel": 9.98,
         "temp": 29.02,
         "humidity": 61.48,
-        "soilMoisture": 61.29,
         "batteryLevel": 85.0,
         "flameDetected": false,
         "windSpeed": 2.59
@@ -82,7 +78,6 @@
         "smokeLevel": 10.23,
         "temp": 29.36,
         "humidity": 63.2,
-        "soilMoisture": 61.29,
         "batteryLevel": 85.0,
         "flameDetected": false,
         "windSpeed": 2.53
@@ -100,7 +95,6 @@
         "smokeLevel": 9.55,
         "temp": 29.18,
         "humidity": 62.2,
-        "soilMoisture": 57.97,
         "batteryLevel": 85.0,
         "flameDetected": false,
         "windSpeed": 2.41
@@ -118,7 +112,6 @@
         "smokeLevel": 9.78,
         "temp": 29.35,
         "humidity": 61.9,
-        "soilMoisture": 60.78,
         "batteryLevel": 85.0,
         "flameDetected": false,
         "windSpeed": 2.54
@@ -136,7 +129,6 @@
         "smokeLevel": 9.77,
         "temp": 29.1,
         "humidity": 62.54,
-        "soilMoisture": 61.8,
         "batteryLevel": 85.0,
         "flameDetected": false,
         "windSpeed": 2.57
@@ -154,7 +146,6 @@
         "smokeLevel": 70.6,
         "temp": 46.49,
         "humidity": 27.21,
-        "soilMoisture": 21.05,
         "batteryLevel": 85.0,
         "flameDetected": false,
         "windSpeed": 9.64
@@ -172,7 +163,6 @@
         "smokeLevel": 68.47,
         "temp": 47.29,
         "humidity": 27.82,
-        "soilMoisture": 21.82,
         "batteryLevel": 85.0,
         "flameDetected": false,
         "windSpeed": 8.63
@@ -190,7 +180,6 @@
         "smokeLevel": 66.41,
         "temp": 47.16,
         "humidity": 28.67,
-        "soilMoisture": 21.06,
         "batteryLevel": 85.0,
         "flameDetected": false,
         "windSpeed": 9.01
@@ -208,7 +197,6 @@
         "smokeLevel": 62.63,
         "temp": 46.27,
         "humidity": 28.21,
-        "soilMoisture": 21.66,
         "batteryLevel": 85.0,
         "flameDetected": false,
         "windSpeed": 8.83
@@ -226,7 +214,6 @@
         "smokeLevel": 100.0,
         "temp": 63.17,
         "humidity": 11.24,
-        "soilMoisture": 8.95,
         "batteryLevel": 85.0,
         "flameDetected": false,
         "windSpeed": 17.1
@@ -244,7 +231,6 @@
         "smokeLevel": 100.0,
         "temp": 61.04,
         "humidity": 10.96,
-        "soilMoisture": 9.23,
         "batteryLevel": 85.0,
         "flameDetected": false,
         "windSpeed": 16.36
@@ -262,7 +248,6 @@
         "smokeLevel": 100.0,
         "temp": 63.02,
         "humidity": 11.24,
-        "soilMoisture": 9.01,
         "batteryLevel": 85.0,
         "flameDetected": false,
         "windSpeed": 16.06

@@ -1,6 +1,6 @@
 """
 TEST 1 — MCP3008 (ADC SPI)
-Jalankan SEBELUM testing sensor analog apapun (MQ-2/MQ-135/soil), karena
+Jalankan SEBELUM testing sensor analog apapun (pressure/battery), karena
 semua sensor itu bergantung ke chip ini.
 
 Usage: python3 tests/test_mcp3008.py

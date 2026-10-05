@@ -41,8 +41,6 @@ class DBManager:
                 timestamp         TEXT    NOT NULL,
                 device_id         TEXT    NOT NULL,
 
-                soil_surface_pct  REAL,
-                soil_deep_pct     REAL,
                 water_current_ma  REAL,
                 water_depth_m     REAL,
                 water_fault_open  INTEGER,
@@ -75,14 +73,13 @@ class DBManager:
     def log_reading(self, data: dict, api_payload: dict) -> int:
         """
         Simpan satu siklus baca ke database SEBELUM dicoba dikirim ke API.
-        - data:        dict hasil EFWS._read_all() → {"soil":{"surface":{...},
-                       "deep":{...}}, "pressure":{...}}
+        - data:        dict hasil EFWS._read_all() → {"pressure":{...},
+                       "rain":{...}}
         - api_payload: payload PERSIS yang akan dikirim ke API, disimpan utuh
                        di kolom full_payload untuk audit/pembanding dengan isi
                        antrian offline.
         Return: row id.
         """
-        soil     = data.get("soil", {})
         pressure = data.get("pressure", {})
         rain = data.get("rain", {})
 
@@ -90,18 +87,15 @@ class DBManager:
         cur.execute("""
             INSERT INTO sensor_readings (
                 timestamp, device_id,
-                soil_surface_pct, soil_deep_pct,
                 water_current_ma, water_depth_m, water_fault_open,
                 rainfall_mm, rain_working_hrs,
                 full_payload
             ) VALUES (
-                ?,?,  ?,?,  ?,?,?,  ?,?,  ?
+                ?,?,  ?,?,?,  ?,?,  ?
             )
         """, (
             datetime.now(timezone.utc).isoformat(),
             settings.DEVICE_ID,
-            soil.get("surface", {}).get("moisture_percent"),
-            soil.get("deep", {}).get("moisture_percent"),
             pressure.get("current_ma"), pressure.get("depth_m"),
             int(bool(pressure.get("fault_open_loop", False))),
             rain.get("rainfall_mm"), rain.get("working_time_hr"),
@@ -157,7 +151,6 @@ class DBManager:
         cur = self.conn.cursor()
         cur.execute("""
             SELECT id, timestamp,
-                   soil_surface_pct, soil_deep_pct,
                    water_depth_m, water_fault_open
             FROM   sensor_readings
             ORDER  BY id DESC LIMIT ?

@@ -24,10 +24,6 @@ SENSOR_SCHEMAS = {
     "mq135":    {"voltage": None, "ppm": None},
     "bme280":   {"temperature_c": None, "humidity_percent": None, "pressure_hpa": None},
     "pressure": {"current_ma": None, "depth_m": None, "pressure_bar": None, "fault_open_loop": None},
-    "soil": {
-        "surface": {"raw": None, "moisture_percent": None},
-        "deep":    {"raw": None, "moisture_percent": None},
-    },
     "wind":    {"speed_ms": None},
     "battery": {"voltage": None, "percent": None},
 }

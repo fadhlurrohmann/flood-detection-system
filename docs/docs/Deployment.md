@@ -2,7 +2,7 @@
 
 This guide from NOL until EFWS running stabil in background, using
 real hardware: Raspberry Pi 4, MCP3008 (ADC SPI), Logic Level Converter,
-MQ-2, MQ-135, BME280, 2x Soil moisture probe, Submersible pressure sensor
+MQ-2, MQ-135, BME280, Submersible pressure sensor
 (4-20mA), Module sensor voltage DC 0-25V (battery), RS485 Anemometer,
 A7670E/SIM7600 (4G+GNSS, one only), Relay 5V + Siren 12V 120dB.
 
@@ -133,28 +133,25 @@ python3 tests/test_gas_sensors.py
 # 3. BME280 (I2C, independent from MCP3008)
 python3 tests/test_bme280.py
 
-# 4. Soil moisture probe (analog, through MCP3008) - including calibration
-python3 tests/test_soil.py
-
-# 5. Submersible pressure sensor (analog via burden resistor, through MCP3008)
+# 4. Submersible pressure sensor (analog via burden resistor, through MCP3008)
 python3 tests/test_pressure.py
 
-# 6. Battery voltage sensor (analog, through MCP3008)
+# 5. Battery voltage sensor (analog, through MCP3008)
 python3 tests/test_battery.py
 
-# 7. RS485 Anemometer
+# 6. RS485 Anemometer
 python3 tests/test_anemometer.py
 
-# 8. A7670E/SIM7600 - signal, SIM, GPS
+# 7. A7670E/SIM7600 - signal, SIM, GPS
 python3 tests/test_a7670e.py --gps-timeout 90
 
-# 9. Relay + Siren (⚠️ SUARA LOUD 120dB, read warning in the script)
+# 8. Relay + Siren (⚠️ SUARA LOUD 120dB, read warning in the script)
 python3 tests/test_relay_siren.py
 
-# 10. All sensors together, one read cycle (final check before main.py)
+# 9. All sensors together, one read cycle (final check before main.py)
 python3 tests/test_all_sensors.py
 
-# 11. Offline queue integrity (simulate signal loss and verify data is unchanged)
+# 10. Offline queue integrity (simulate signal loss and verify data is unchanged)
 python3 tests/test_offline_queue_integrity.py
 ```
 
@@ -231,7 +228,6 @@ nano .env
 | MQ-2/MQ-135 | value always stuck in numeric same (clipping) | Forgot to install logic level converter in route analog path |
 | MQ-2/MQ-135 | ppm value is not sensible | Sensor has not warmed up (24-48 hours may be needed for full accuracy) |
 | BME280 | `i2cdetect -y 1` NOT appear 0x76 | I2C not active yet; wiring SDA/SCL reversed; address actually 0x77 (set `EFWS_BME280_ADDR=0x77`) |
-| Soil probe | moisture_percent always 0% or 100% | not calibrated yet (`dry_raw`/`wet_raw` in `sensors/soil.py`) |
 | Pressure sensor | `current_ma` always ~0, `fault_open_loop=True` | Loop disconnected/not yet connected, or PSU 12-24V loop not yet on — Run `python3 tests/test_pressure.py` for diagnosis |
 | Pressure sensor | `depth_m` NOT enter sense | `EFWS_PRESSURE_RANGE_M` not yet adapted datasheet sensor You |
 | Battery sensor | `voltage`/`percent` NOT enter sense | `BATTERY_SENSOR_MAX_V`/`BATTERY_MAX_V`/`BATTERY_MIN_V` not yet adapted specification battery |

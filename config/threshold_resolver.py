@@ -34,31 +34,13 @@ def resolve_active_thresholds(local: dict, remote_config: Optional[dict]) -> dic
 
     resolved = dict(local)  # shallow copy cukup, semua field top-level scalar/dict kecil
 
-    resolved["smokeDangerThreshold"] = _pick(
-        remote.get("smokeDangerThreshold"), local["smokeDangerThreshold"]
-    )
-    resolved["temperatureDangerThreshold"] = _pick(
-        remote.get("temperatureDangerThreshold"), local["temperatureDangerThreshold"]
-    )
-    resolved["humidityDangerThreshold"] = _pick(
-        remote.get("humidityDangerThreshold"), local["humidityDangerThreshold"]
-    )
     resolved["waterDangerThreshold"] = _pick(
         remote.get("waterDangerThreshold"), local["waterDangerThreshold"]
     )
-
-    # soilMoistureDangerThreshold: nested dict {surface, deep} -- merge per sub-field juga,
-    # karena API bisa saja suatu saat cuma mengisi salah satu (mis. surface saja).
-    remote_soil = remote.get("soilMoistureDangerThreshold")
-    if not isinstance(remote_soil, dict):
-        remote_soil = {}
-    local_soil = local["soilMoistureDangerThreshold"]
-    resolved["soilMoistureDangerThreshold"] = {
-        "surface": _pick(remote_soil.get("surface"), local_soil["surface"]),
-        "deep":    _pick(remote_soil.get("deep"),    local_soil["deep"]),
-    }
-
-    # windDangerThreshold: TIDAK ADA di kontrak API sama sekali -- selalu lokal.
-    resolved["windDangerThreshold"] = local["windDangerThreshold"]
+    # rainfallDangerThreshold belum ada di thresholds.json -- kalau backend juga
+    # belum mengirim, hasilnya None dan _evaluate tidak memicu alarm hujan.
+    resolved["rainfallDangerThreshold"] = _pick(
+        remote.get("rainfallDangerThreshold"), local.get("rainfallDangerThreshold")
+    )
 
     return resolved

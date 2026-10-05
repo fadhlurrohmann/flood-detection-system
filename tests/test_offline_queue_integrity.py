@@ -38,7 +38,6 @@ SAMPLE_PAYLOAD = {
         "smokeLevel":           43.2,
         "temp":                 42.5,
         "humidity":             67.1,
-        "soilMoisture":         12.7,
         "batteryLevel":         85.0,
         "flameDetected":        False,
         "windSpeed":            3.4,

@@ -63,18 +63,16 @@ def _load_sensors_and_alarm():
     if settings.RUN_MODE == "mock":
         logger.info("Mode: MOCK — sensor disimulasi, tidak ada akses GPIO/I2C")
         from sensors.mock_sensors import (
-            MockPressureWater, MockSoilMoisture, MockRainfall,
+            MockPressureWater, MockRainfall,
             MockAlarmController,
         )
         return {
             "pressure": MockPressureWater(),
-            "soil":     MockSoilMoisture(),
             "rain":     MockRainfall(),
         }, MockAlarmController()
     else:
         logger.info("Mode: HARDWARE — mengakses GPIO/SPI/I2C nyata")
         from sensors.pressure    import PressureWaterSensor
-        from sensors.soil        import SoilMoistureSensor
         from sensors.rainfall    import RainfallSensor
         from sensors.null_sensor import NullSensor, NullAlarmController
         from alarm.siren         import AlarmController
@@ -82,7 +80,6 @@ def _load_sensors_and_alarm():
 
         factories = {
             "pressure": PressureWaterSensor,
-            "soil":     SoilMoistureSensor,
             "rain":     RainfallSensor,
             "jarak":    JSN_SR04T,
         }
@@ -260,13 +257,8 @@ class EFWS:
         """
         t = resolve_active_thresholds(self.hardcoded_thresholds, self.api.remote_config)
 
-        surface = data["soil"].get("surface", {}).get("moisture_percent")
-        deep    = data["soil"].get("deep", {}).get("moisture_percent")
-
         checks = {
             "water":        _exceeds(data["pressure"].get("depth_m"), t["waterDangerThreshold"], lower_is_worse=True),
-            "soil_surface": _exceeds(surface, t["soilMoistureDangerThreshold"]["surface"], lower_is_worse=True),
-            "soil_deep":    _exceeds(deep,    t["soilMoistureDangerThreshold"]["deep"],    lower_is_worse=True),
             "rainfall":     _exceeds(data["rain"].get("rainfall_mm"), t.get("rainfallDangerThreshold"), lower_is_worse=False),
         }
 
@@ -283,7 +275,6 @@ class EFWS:
         }
 
     def _build_telemetry_payload(self, data) -> dict:
-        soil     = data.get("soil", {})
         pressure = data.get("pressure", {})
         rain     = data.get("rain", {})
         distance_m = data.get("jarak")
@@ -302,10 +293,6 @@ class EFWS:
                     "timestamp": timestamp,
                     "waterLevel": pressure.get("depth_m"),
                     "distanceM": distance_m,
-                    "soilMoisture": {
-                        "surface": soil.get("surface", {}).get("moisture_percent"),
-                        "deep":    soil.get("deep", {}).get("moisture_percent"),
-                    },
                     "rainfallMm": rain.get("rainfall_mm"),
                 }
             ],
@@ -313,7 +300,7 @@ class EFWS:
 
     def _build_heartbeat_payload(self, data) -> dict:
         # NOTE: batteryLevel dulu diambil dari sensor battery yang sudah
-        # dihapus (bukan bagian dari 3 sensor: pressure/soil/rain). Kalau
+        # dihapus (bukan bagian dari sensor: pressure/rain/jarak). Kalau
         # backend WAJIB terima batteryLevel numerik tiap heartbeat, kasih
         # tau -- kita bisa tambah battery cuma buat keperluan heartbeat ini.
         return {
@@ -447,11 +434,9 @@ class EFWS:
                     next_routine_in = int(settings.ROUTINE_SEND_INTERVAL_SEC - (now - self._last_routine_send))
                     logger.info(
                         "READ | semua nilai NORMAL — tidak kirim (kirim rutin berikutnya dalam %ds). "
-                        "water=%.2fm soil_surface=%.1f%% soil_deep=%.1f%% rain=%.1fmm",
+                        "water=%.2fm rain=%.1fmm",
                         next_routine_in,
                         data["pressure"].get("depth_m", 0) or 0,
-                        data["soil"].get("surface", {}).get("moisture_percent", 0) or 0,
-                        data["soil"].get("deep", {}).get("moisture_percent", 0) or 0,
                         data["rain"].get("rainfall_mm", 0) or 0,
                     )
 

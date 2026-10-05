@@ -9,7 +9,6 @@
       "smokeLevel": 100.0,
       "temp": 62.0,
       "humidity": 11.0,
-      "soilMoisture": 9.0,
       "batteryLevel": 85.0,
       "flameDetected": false,
       "windSpeed": 17.0

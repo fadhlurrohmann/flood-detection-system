@@ -37,7 +37,6 @@ sample = {
         "smokeLevel":           9.8,
         "temp":                 29.5,
         "humidity":             63.0,
-        "soilMoisture":         60.0,
         "batteryLevel":         85.0,
         "flameDetected":        False,
         "windSpeed":            2.5,

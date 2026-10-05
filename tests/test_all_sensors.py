@@ -9,7 +9,6 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 TESTS = [
     ("Submersible pressure", "sensors.pressure", "PressureWaterSensor", "read"),
-    ##("Soil moisture (dual)", "sensors.soil", "SoilMoistureSensor", "read"),
     ##("Rainfall", "sensors.rainfall", "RainfallSensor", "read"),
     ("Ultrasonic distance", "sensors.JSN_SR04T", "JSN_SR04T", "read"),
     ("Water flow", "sensors.YF_S201", "YFS201", "read_flow_rate"),
@@ -45,7 +44,7 @@ def main():
 
     if "FAILED" in results.values():
         print("\nFor failed sensors:")
-        print("  - SPI: ls /dev/spidev*  (pressure and soil through MCP3008)")
+        print("  - SPI: ls /dev/spidev*  (pressure and battery through MCP3008)")
         print("  - I2C: i2cdetect -y 1   (rainfall sensor)")
         print("  - GPIO: verify distance and flow pins in .env")
         print("  - See docs/Pinout.md for complete wiring details")

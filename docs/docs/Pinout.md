@@ -2,7 +2,7 @@
 
 Final hardware:
 **Raspberry Pi 4 · MCP3008 (SPI ADC 8-ch) · 1x Logic Level Converter (min. 6-channel)
-· MQ-2 · MQ-135 · BME280 (I2C) · Soil Probe Surface · Soil Probe Deep
+· MQ-2 · MQ-135 · BME280 (I2C)
 · Submersible Pressure Sensor (4-20mA loop) · DC Voltage Sensor Module 0-25V (battery)
 · RS485 Anemometer · A7670E OR SIM7600 (auto-detect, only one installed)
 · 5V Relay · 12V Siren**
@@ -238,8 +238,7 @@ Control side (Pi 3.3V GPIO):          High-power side (12V):
 ```
 MQ-2 AOUT (5V)      ──┐
 MQ-135 AOUT (5V)    ──┤
-Soil-S AOUT (5V)    ──┤    LLC (1 module, 6 channels used)
-Soil-D AOUT (5V)    ──┤    HV1-6 (5V) → LV1-6 (3.3V)
+                    ──┤    LLC → MCP3008
 Pressure via R_BURDEN─┤
 Battery Sensor OUT  ──┘         │
                                 ▼

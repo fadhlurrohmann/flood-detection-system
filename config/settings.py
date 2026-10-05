@@ -72,27 +72,23 @@ BME280_ADDRESS = int(_opt("EFWS_BME280_ADDR", "0x76"), 16)
 
 # ─── SPI / MCP3008 (ADC 8-channel, SATU Logic Level Converter) ─────────────
 # Versi hardware: 1x MCP3008, 1x LLC (min. 6-channel, mis. modul 8-ch),
-# 2x soil probe, MQ-2, MQ-135, anemometer RS485 (langsung USB, tanpa LLC),
+# MQ-2, MQ-135, anemometer RS485 (langsung USB, tanpa LLC),
 # submersible pressure sensor (loop 4-20mA + burden resistor), modul sensor
 # tegangan baterai DC 0-25V, dan modem 4G (A7670E ATAU SIM7600 — auto-detect,
 # hanya satu yang dipasang).
 #
-#   LLC (HV=5V, LV=3.3V) — semua sensor analog 0-5V:
-#     HV-1 → LV-1 : Soil Surface AOUT                     → CH0
-#     HV-2 → LV-2 : Soil Deep    AOUT                     → CH1
-#     HV-3 → LV-3 : Pressure sensor (lewat R_BURDEN)      → CH2
-#     HV-4 → LV-4 : Voltage Sensor Module OUT             → CH3
-#     HV-5..8 / CH4-CH7 : spare, tidak dikabel
+#   Peta channel MCP3008:
+#     CH2 : Pressure sensor via R_BURDEN — langsung, TANPA LLC (maks ~2V)
+#     CH3 : Voltage Sensor Module S  — LLC HV-3 → LV-3
+#     CH0, CH1, CH4-CH7 : spare, tidak dikabel
 SPI_BUS          = _int("EFWS_SPI_BUS", 0)
 SPI_DEVICE       = _int("EFWS_SPI_DEVICE", 0)
 SPI_MAX_SPEED_HZ = _int("EFWS_SPI_SPEED", 1350000)
 MCP3008_VREF     = _float("EFWS_MCP3008_VREF", 3.3)
 
-ADC_CHANNEL_SOIL_SURFACE    = _int("EFWS_ADC_SOIL_SURFACE",  0)   # LLC HV-0 (probe 0-30cm)
-ADC_CHANNEL_WATER_FLOW       = _int("EFWS_ADC_WATER_FLOW",     1)   # LLC HV-1 (probe 30-60cm)
-ADC_CHANNEL_PRESSURE        = _int("EFWS_ADC_PRESSURE",      2)   # LLC HV-2 (pressure sensor via R_BURDEN)
-ADC_CHANNEL_BATTERY         = _int("EFWS_ADC_BATTERY",       3)   # LLC HV-3 (voltage sensor module OUT)
-# CH4-CH7 tidak dikabel — spare fisik di MCP3008
+ADC_CHANNEL_PRESSURE        = _int("EFWS_ADC_PRESSURE",      2)   # via R_BURDEN, tanpa LLC
+ADC_CHANNEL_BATTERY         = _int("EFWS_ADC_BATTERY",       3)   # LLC HV-3 → LV-3 (voltage sensor module S)
+# CH0, CH1, CH4-CH7 tidak dikabel — spare fisik di MCP3008
 
 # ─── Gravity Rainfall Sensor (DFRobot SEN0575) ─────────────────────────────
 I2C_BUS = 1
@@ -107,9 +103,9 @@ BATTERY_MAX_V        = _float("EFWS_BATTERY_MAX_V",        12.6)  # tegangan bat
 BATTERY_MIN_V        = _float("EFWS_BATTERY_MIN_V",         9.0)  # tegangan baterai kosong (V)
 
 # ─── Submersible Pressure Sensor — loop 4-20mA ──────────────────────────────
-# Sensor loop-powered 2-kabel, dibaca via burden resistor presisi lalu LLC
+# Sensor loop-powered 2-kabel, dibaca via burden resistor presisi langsung ke MCP3008 (tanpa LLC)
 # (lihat sensors/pressure.py untuk detail kalkulasi & wiring).
-PRESSURE_BURDEN_OHM = _float("EFWS_PRESSURE_BURDEN_OHM", 100)  # 4mA→1V, 20mA→5V
+PRESSURE_BURDEN_OHM = _float("EFWS_PRESSURE_BURDEN_OHM", 100)  # 4mA→0.4V, 20mA→2.0V
 PRESSURE_MIN_MA     = _float("EFWS_PRESSURE_MIN_MA",       4.0)
 PRESSURE_MAX_MA     = _float("EFWS_PRESSURE_MAX_MA",      20.0)
 PRESSURE_RANGE_M    = _float("EFWS_PRESSURE_RANGE_M",      3.0)  # rentang penuh sensor, sesuaikan datasheet

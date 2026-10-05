@@ -2,26 +2,22 @@
 Driver MCP3008 (ADC 8-channel, 10-bit, via SPI) — menggantikan ADS1115.
 
 MCP3008 dipakai karena Pi 4 tidak punya pin analog. Semua sensor analog
-(MQ-2, MQ-135, soil moisture x2, pressure sensor, battery voltage sensor)
+(pressure sensor, battery voltage sensor)
 terhubung ke satu chip MCP3008 yang sama, dibaca lewat SPI hardware (SPI0, CE0).
 
 PENTING soal tegangan:
   - MCP3008 VDD/VREF harus 3.3V (BUKAN 5V) karena terhubung langsung ke
     Pi tanpa level shifter di sisi SPI.
-  - Tapi MQ-2/MQ-135/soil probe/battery sensor outputnya 0-5V → SETIAP
+  - Tapi battery sensor outputnya 0-5V → SETIAP
     channel analog MCP3008 yang menerima sinyal dari sensor 5V WAJIB
     melewati logic level converter (sisi HV=5V ke sensor, sisi LV=3.3V ke
     MCP3008), kalau tidak pembacaan akan clipping/jenuh di ~3.3V dan bisa
     merusak chip dalam jangka panjang.
 
 Pemetaan channel default (lihat docs/Pinout.md untuk detail wiring):
-  CH0 → MQ-2 (lewat LLC)
-  CH1 → MQ-135 (lewat LLC)
-  CH2 → Soil moisture — surface (lewat LLC)
-  CH3 → Soil moisture — deep (lewat LLC)
-  CH4 → Submersible pressure sensor, via burden resistor (lewat LLC)
-  CH5 → Battery voltage sensor module (lewat LLC)
-  CH6-CH7 → cadangan/ekspansi
+  CH2 → Submersible pressure sensor, via burden resistor (langsung, TANPA LLC)
+  CH3 → Battery voltage sensor module (LLC HV-3 → LV-3)
+  CH0, CH1, CH4-CH7 → cadangan/ekspansi
 
 Requires: pip install spidev
 """
