@@ -49,7 +49,7 @@ class DBManager:
                 sps_depth_m  REAL,
                 pressure_bar REAL, 
                 fault_open_loop   INTEGER,
-                flow_rate    REAL,   -- YF-S201
+                flow_rate_lm    REAL,   -- YF-S201
                 jsn_depth_m  REAL,   -- JSN_SR04T
                 battery_voltage    REAL,   -- battery
                 battery_pct        REAL,
@@ -129,7 +129,7 @@ class DBManager:
                 temperature_c, humidity_pct, pressure_hpa,
                 wind_speed_ms, wind_direction,
                 water_current_ma, sps_depth_m, pressure_bar, fault_open_loop,
-                flow_rate,
+                flow_rate_lm,
                 jsn_depth_m,
                 battery_voltage, battery_pct,
                 rainfall_delta_mm,
@@ -145,7 +145,7 @@ class DBManager:
             wind.get("speed_ms"), data.get("wind_dir", {}).get("direction_abbr"), #anemometer
             pressure.get("current_ma"), pressure.get("depth_m"), pressure.get("pressure_bar"), #submersible pressure
             int(bool(pressure.get("fault_open_loop", False))),
-            yf_s201.get("flow_rate"), #flow meter
+            yf_s201.get("flow_rate_lm"), #flow meter
             jsn_sr04t.get("jsn_depth_m"), #ultrasonic distance
             battery.get("voltage"), battery.get("percent"), #battery
             rainfall_delta_mm,
@@ -232,7 +232,7 @@ class DBManager:
                     temperature_c, humidity_pct, pressure_hpa,
                     wind_speed_ms, wind_direction,
                     water_current_ma, sps_depth_m, pressure_bar, fault_open_loop,
-                    flow_rate,
+                    flow_rate_lm,
                     jsn_depth_m,
                     battery_voltage, battery_pct
             FROM   sensor_readings
