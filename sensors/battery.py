@@ -13,11 +13,15 @@ Kalkulasi:
   JANGAN lewat LLC: modul LLC BSS138 punya pull-up 10k ke 5V di sisi HV yang
   menarik V_s naik (13.26V → 3.53V, bukan 2.65V), dan sisi LV terkunci di ~3.3V.
 """
+import statistics
+
 from config import settings
 from sensors.mcp3008 import get_mcp3008
 
 
 class BatterySensor:
+    SAMPLES = 9   # median dari N sampel cepat → buang spike noise ADC
+
     def __init__(self, channel=None, divider_ratio=None, vref=None, batt_max_v=None, batt_min_v=None):
         self.channel      = channel      if channel      is not None else settings.ADC_CHANNEL_BATTERY
         self.ratio        = divider_ratio if divider_ratio is not None else settings.BATTERY_DIVIDER_RATIO
@@ -26,19 +30,27 @@ class BatterySensor:
         self.batt_min_v   = batt_min_v   if batt_min_v   is not None else settings.BATTERY_MIN_V
         self.adc          = get_mcp3008()
 
-    def read_voltage(self) -> float:
-        raw = self.adc.read_raw(self.channel)
+    def read_raw(self) -> int:
+        samples = [self.adc.read_raw(self.channel) for _ in range(self.SAMPLES)]
+        return int(statistics.median(samples))
+
+    def raw_to_voltage(self, raw: int) -> float:
         return round(raw / 1023.0 * self.vref * self.ratio, 3)
 
-    def read_percent(self) -> float:
-        v    = self.read_voltage()
+    def read_voltage(self) -> float:
+        return self.raw_to_voltage(self.read_raw())
+
+    def voltage_to_percent(self, v: float) -> float:
         span = self.batt_max_v - self.batt_min_v
         pct  = (v - self.batt_min_v) / span * 100
         return round(max(0.0, min(100.0, pct)), 1)
 
+    def read_percent(self) -> float:
+        return self.voltage_to_percent(self.read_voltage())
+
     def read(self) -> dict:
-        v = self.read_voltage()
-        return {"voltage": v, "percent": self.read_percent()}
+        v = self.read_voltage()   # satu pembacaan → voltage & percent konsisten
+        return {"voltage": v, "percent": self.voltage_to_percent(v)}
 
 
 if __name__ == "__main__":
