@@ -20,8 +20,6 @@ lengkap dengan semua key, cuma isinya null -- baik diakses lewat
 """
 
 SENSOR_SCHEMAS = {
-    "mq2":      {"voltage": None, "ppm": None},
-    "mq135":    {"voltage": None, "ppm": None},
     "bme280":   {"temperature_c": None, "humidity_percent": None, "pressure_hpa": None},
     "pressure": {"current_ma": None, "depth_m": None, "pressure_bar": None, "fault_open_loop": None},
     "wind":    {"speed_ms": None},

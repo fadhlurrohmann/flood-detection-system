@@ -11,7 +11,7 @@
 │              │◄───────►│                            │──────────►│ Relay 5V   │──►12V Siren
 │ GY-MS5837    │         │      Raspberry Pi 4        │           └────────────┘
 ├──────────────┤  SPI    │      (main.py orchestrator)│
-│LLC ->        │◄───────►│                            │   GPIO I  ┌────────────┐
+│              │◄───────►│                            │   GPIO I  ┌────────────┐
 │  MCP3008 ADC │         │                            │◄──────────│ JSN-SR04T  │
 │ (Pressure/   │         │                            │           │ YF-S201    │
 │              │         │                            │           │  (digital) │

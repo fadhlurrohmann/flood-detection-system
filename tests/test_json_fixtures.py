@@ -4,7 +4,7 @@ TEST — Kirim semua fixture JSON ke /sensors/telemetry untuk verifikasi.
 Berguna untuk:
   - Konfirmasi format payload diterima API/backend dengan benar
   - Lihat tampilan tiap skenario di webhook.site sebelum hardware terpasang
-  - Cek edge case smokeLevel tanpa perlu sensor asli
+  - Cek edge case tanpa perlu sensor asli
 
 Usage:
   python3 tests/test_json_fixtures.py
@@ -53,14 +53,14 @@ def main():
 
         for i, item in enumerate(items, 1):
             t     = item.get("telemetry", [{}])[0]
-            sl    = t.get("smokeLevel", "?")
+            rain  = t.get("rainfallMm", "?")
             wl    = t.get("waterLevel", "?")
             edge  = f"  [{t.get('_edgeCase','')}]" if "_edgeCase" in t else ""
             total += 1
 
             ok = api.send_telemetry(item)
             ok_count += ok
-            print(f"  [{'OK  ' if ok else 'FAIL'}] #{i:02d}  smoke={sl}%  water={wl}m{edge}")
+            print(f"  [{'OK  ' if ok else 'FAIL'}] #{i:02d}  water={wl}m  rain={rain}mm{edge}")
             time.sleep(args.delay)
 
     api.close()

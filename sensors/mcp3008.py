@@ -8,15 +8,14 @@ terhubung ke satu chip MCP3008 yang sama, dibaca lewat SPI hardware (SPI0, CE0).
 PENTING soal tegangan:
   - MCP3008 VDD/VREF harus 3.3V (BUKAN 5V) karena terhubung langsung ke
     Pi tanpa level shifter di sisi SPI.
-  - Sensor dengan output 0-5V → SETIAP
-    channel analog MCP3008 yang menerima sinyal dari sensor 5V WAJIB
-    melewati logic level converter (sisi HV=5V ke sensor, sisi LV=3.3V ke
-    MCP3008), kalau tidak pembacaan akan clipping/jenuh di ~3.3V dan bisa
-    merusak chip dalam jangka panjang.
+  - Tegangan di SETIAP channel harus < 3.3V (VREF). Sinyal yang lebih tinggi
+    diturunkan pakai pembagi tegangan (resistor), JANGAN lewat logic level
+    converter: pull-up 10k di modul LLC mengubah tegangan analog (sisi HV
+    ditarik ke 5V, sisi LV mentok/diam di 3.3V) → pembacaan salah.
 
 Pemetaan channel default (lihat docs/Pinout.md untuk detail wiring):
   CH2 → Submersible pressure sensor, via burden resistor (langsung, TANPA LLC)
-  CH3 → Battery voltage sensor module (langsung, TANPA LLC — maks ~2.9V)
+  CH3 → Battery voltage sensor module (langsung, maks ~2.9V)
   CH0, CH1, CH4-CH7 → cadangan/ekspansi
 
 Requires: pip install spidev

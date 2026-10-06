@@ -3,7 +3,7 @@ TEST — Modul Sensor Tegangan DC 0-25V (baterai, lewat MCP3008 CH3)
 
 Cek dulu sebelum run:
   ls /dev/spidev*  → harus ada /dev/spidev0.0
-  Pin S modul tersambung LANGSUNG ke MCP3008 CH3 (tanpa LLC)
+  Pin S modul tersambung LANGSUNG ke MCP3008 CH3
   GND modul (sisi output, pin −) tersambung ke GND Pi / MCP3008 (ground bersama)
 
 Tiap baris menampilkan 50 sampel cepat: raw min/median/max, tegangan di pin
@@ -58,8 +58,8 @@ if spread > 30 or v_pin < 0.3:
     print("   4. Tes ADC: jumper CH3 ke 3.3V → raw ≈ 1023; jumper CH3 ke GND → raw ≈ 0.")
     print("      Kalau ini juga acak → masalah di wiring MCP3008 (VDD/VREF/AGND/DGND/SPI).")
 elif v_pin > 3.2:
-    print(f"❌ V_pin {v_pin:.2f}V mentok di ~3.3V — kemungkinan S masih lewat LLC (pull-up 5V).")
-    print("   Sambungkan S langsung ke MCP3008 CH3, tanpa LLC.")
+    print(f"❌ V_pin {v_pin:.2f}V mentok di ~3.3V — CH3 ditarik ke 3.3V oleh sambungan lain.")
+    print("   Pastikan pin 4 MCP3008 HANYA tersambung ke pin S modul (ukur pin 4 vs pin 14 ≈ 2.65V).")
 else:
     print(f"✅ Stabil (selisih raw {spread}). Bandingkan voltage di atas dengan multimeter di")
     print("   terminal baterai; kalau beda, set EFWS_BATTERY_DIVIDER_RATIO = V_baterai / V_pin_S.")

@@ -1,6 +1,6 @@
 """
 Modul Sensor Tegangan DC 0-25V — monitoring baterai (voltage divider bawaan modul).
-Pin S langsung ke MCP3008 CH3 — TANPA Logic Level Converter.
+Pin S langsung ke MCP3008 CH3.
 
 Input : terhubung langsung ke terminal Battery+ dan Battery-
 Output: pin S → 0-5V proporsional terhadap tegangan input (0-25V)
@@ -8,10 +8,7 @@ Output: pin S → 0-5V proporsional terhadap tegangan input (0-25V)
 Kalkulasi:
   V_s       = raw / 1023 × MCP3008_VREF
   V_battery = V_s × BATTERY_DIVIDER_RATIO        (modul 30k/7.5k → ÷5)
-  Baterai 14.4V → V_s 2.88V, masih di bawah VREF 3.3V, jadi aman tanpa LLC.
-
-  JANGAN lewat LLC: modul LLC BSS138 punya pull-up 10k ke 5V di sisi HV yang
-  menarik V_s naik (13.26V → 3.53V, bukan 2.65V), dan sisi LV terkunci di ~3.3V.
+  Baterai 14.4V → V_s 2.88V, masih di bawah VREF 3.3V.
 """
 import statistics
 

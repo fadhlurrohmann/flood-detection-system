@@ -62,30 +62,6 @@ if __name__ == "__main__":
 #     print("Program dihentikan")
 
 
-# from gpiozero import DigitalInputDevice
-# from time import sleep
-
-# MQ135_PIN = 17
-
-# sensor = DigitalInputDevice(MQ135_PIN)
-
-# print("Menunggu sensor pemanasan...")
-
-# sleep(30)
-
-# try:
-#     while True:
-#         if sensor.value == 0:
-#             print("⚠️ Gas/asap terdeteksi!")
-#         else:
-#             print("Udara normal")
-
-#         sleep(1)
-
-# except KeyboardInterrupt:
-#     print("Program dihentikan")
-
-
 # """
 # SIM7600E-H Diagnostic Test Script
 # ===================================

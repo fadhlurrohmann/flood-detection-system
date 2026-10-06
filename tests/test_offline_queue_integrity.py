@@ -35,7 +35,6 @@ SAMPLE_PAYLOAD = {
         "timestamp":            "2026-07-07T00:00:00.000Z",
         "waterLevel":           2.1,
         "waterLevelCurrentMa":  12.4,
-        "smokeLevel":           43.2,
         "temp":                 42.5,
         "humidity":             67.1,
         "batteryLevel":         85.0,
