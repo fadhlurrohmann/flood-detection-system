@@ -230,7 +230,7 @@ nano .env
 | BME280 | `i2cdetect -y 1` NOT appear 0x76 | I2C not active yet; wiring SDA/SCL reversed; address actually 0x77 (set `EFWS_BME280_ADDR=0x77`) |
 | Pressure sensor | `current_ma` always ~0, `fault_open_loop=True` | Loop disconnected/not yet connected, or PSU 12-24V loop not yet on — Run `python3 tests/test_pressure.py` for diagnosis |
 | Pressure sensor | `depth_m` NOT enter sense | `EFWS_PRESSURE_RANGE_M` not yet adapted datasheet sensor You |
-| Battery sensor | `voltage`/`percent` NOT enter sense | `BATTERY_SENSOR_MAX_V`/`BATTERY_MAX_V`/`BATTERY_MIN_V` not yet adapted specification battery |
+| Battery sensor | `voltage`/`percent` NOT enter sense | `BATTERY_DIVIDER_RATIO`/`BATTERY_MAX_V`/`BATTERY_MIN_V` not yet adapted to your module and battery |
 | Anemometer | Exception when read | Slave ID/register Modbus wrong (check datasheet unit You); wiring A/B reversed |
 | A7670E | `AT` NOT responds | Port wrong (`ls /dev/ttyUSB*`), module not yet power-on, baudrate wrong |
 | A7670E | GPS timeout continuously | Antenna GNSS not yet installed/There is no sky open; make sure use `AT+CGNSSPWR` not `AT+CGPS` (already correct in code this) |

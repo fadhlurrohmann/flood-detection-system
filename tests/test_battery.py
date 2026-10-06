@@ -3,7 +3,7 @@ TEST — Modul Sensor Tegangan DC 0-25V (baterai, lewat MCP3008 CH3)
 
 Cek dulu sebelum run:
   ls /dev/spidev*  → harus ada /dev/spidev0.0
-  Pin S modul tersambung ke LLC HV-3 → LV-3 → MCP3008 CH3
+  Pin S modul tersambung LANGSUNG ke MCP3008 CH3 (tanpa LLC)
 
 Usage: python3 tests/test_battery.py
 """

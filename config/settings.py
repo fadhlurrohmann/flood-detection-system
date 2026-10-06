@@ -23,7 +23,7 @@ def _find_and_load_dotenv():
     # Tidak ketemu .env — load_dotenv tetap jalan (baca dari env var sistem saja)
     print("❌  .env not found, using system environment variables only.")
     load_dotenv(override=True)
-    return search_start
+    return search_start.parent   # root project (satu level di atas config/)
 
 _ROOT = _find_and_load_dotenv()
 print("ROOT :", _ROOT)
@@ -79,7 +79,7 @@ BME280_ADDRESS = int(_opt("EFWS_BME280_ADDR", "0x76"), 16)
 #
 #   Peta channel MCP3008:
 #     CH2 : Pressure sensor via R_BURDEN — langsung, TANPA LLC (maks ~2V)
-#     CH3 : Voltage Sensor Module S  — LLC HV-3 → LV-3
+#     CH3 : Voltage Sensor Module S  — langsung, TANPA LLC (maks ~2.9V)
 #     CH0, CH1, CH4-CH7 : spare, tidak dikabel
 SPI_BUS          = _int("EFWS_SPI_BUS", 0)
 SPI_DEVICE       = _int("EFWS_SPI_DEVICE", 0)
@@ -87,7 +87,7 @@ SPI_MAX_SPEED_HZ = _int("EFWS_SPI_SPEED", 1350000)
 MCP3008_VREF     = _float("EFWS_MCP3008_VREF", 3.3)
 
 ADC_CHANNEL_PRESSURE        = _int("EFWS_ADC_PRESSURE",      2)   # via R_BURDEN, tanpa LLC
-ADC_CHANNEL_BATTERY         = _int("EFWS_ADC_BATTERY",       3)   # LLC HV-3 → LV-3 (voltage sensor module S)
+ADC_CHANNEL_BATTERY         = _int("EFWS_ADC_BATTERY",       3)   # voltage sensor module S, tanpa LLC
 # CH0, CH1, CH4-CH7 tidak dikabel — spare fisik di MCP3008
 
 # ─── Gravity Rainfall Sensor (DFRobot SEN0575) ─────────────────────────────
@@ -98,7 +98,8 @@ RAINFALL_I2C_ADDRESS = 0x1D
 RAINFALL_READ_INTERVAL = 2
 
 # ─── Battery — Modul Sensor Tegangan DC 0-25V ────────────────────────────────
-BATTERY_SENSOR_MAX_V = _float("EFWS_BATTERY_SENSOR_MAX_V", 25.0)  # max input modul sensor (V)
+# V_battery = raw/1023 × MCP3008_VREF × BATTERY_DIVIDER_RATIO. Kalibrasi: ratio = V baterai (multimeter) / V pin S.
+BATTERY_DIVIDER_RATIO = _float("EFWS_BATTERY_DIVIDER_RATIO", 5.0)  # modul 30k/7.5k
 BATTERY_MAX_V        = _float("EFWS_BATTERY_MAX_V",        12.6)  # tegangan baterai penuh (V)
 BATTERY_MIN_V        = _float("EFWS_BATTERY_MIN_V",         9.0)  # tegangan baterai kosong (V)
 

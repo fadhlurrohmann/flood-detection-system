@@ -99,7 +99,6 @@ Use a bidirectional LLC module with at least 6 channels (for example, an 8-chann
 |-----|---------------------------|------------------------------|---------|
 | HV-1 / LV-1 | YF-S201 **AOUT** | NONE | water flow digital |
 |manual RESISTOR | Pressure sensor (via **R_BURDEN**) |  **CH2** | Water level (4-20mA loop) | Re
-| HV-3 / LV-3 | Voltage Sensor Module **OUT** | **CH3** | Battery voltage (0-25V) |
 | HV-7..8 / LV-7..8 | *(spare / expansion)* | CH0, CH1, CH4-CH7 | — |
 
 ### LLC Module Wiring
@@ -180,9 +179,16 @@ This module already includes an internal voltage divider (no need to build one y
 | IN+ | Battery+ terminal (12V LiFePO4 or similar) |
 | IN− | Battery− **after the BMS (P−)** — not the raw cell negative (B−) |
 | GND (output side) | Common ground |
-| S (output, 0-5V proportional to 0-25V) | LLC **HV-3** → LV-3 → MCP3008 **CH3** |
+| S (output = battery ÷ 5) | MCP3008 **CH3** directly — **NOT through the LLC** |
 
-The conversion formula is in `sensors/battery.py`. Calibrate `BATTERY_MAX_V` /
+**Why not through the LLC?** A BSS138 LLC board has a 10kΩ pull-up to 5V on every HV pin.
+It drags S upward (measured: battery 13.26V → S 3.53V instead of 2.65V), and the LV side
+clamps at ~3.3V, so every battery above ~11.4V reads the same. Without the LLC, S stays
+below 3.3V for any battery up to 16.5V (14.4V → 2.88V), so it is safe to connect directly.
+
+Formula: `V_battery = raw / 1023 × MCP3008_VREF × BATTERY_DIVIDER_RATIO` (default 5.0).
+To calibrate, measure the battery and S with a multimeter and set
+`EFWS_BATTERY_DIVIDER_RATIO = V_battery / V_S`. Calibrate `BATTERY_MAX_V` /
 `BATTERY_MIN_V` in `.env` according to your battery specification (default 12.6V full,
 9.0V empty, suitable for 3S LiFePO4 packs).
 
@@ -233,7 +239,7 @@ Control side (Pi 3.3V GPIO):          High-power side (12V):
 ## 6. Complete Signal Block Diagram
 
 ```
-Battery Sensor S    ──►  LLC HV-3 (5V) → LV-3 (3.3V) ──┐
+Battery Sensor S (÷5, max ~2.9V, direct) ─────────────┐
 Pressure via R_BURDEN (0.4-2.0V, direct) ─────────────┤
                                 ▼
                      MCP3008 CH2-CH3  (SPI0)
@@ -280,7 +286,7 @@ A7670E / SIM7600 (USB) ──────────┤
 [ ] SPI enabled (raspi-config → Interface → SPI)
 [ ] I2C enabled (raspi-config → Interface → I2C)
 [ ] Common ground: Pi, MCP3008, LLC, all sensors, relay, pressure PSU → one GND
-[ ] LLC: HV=5V, LV=3.3V, battery sensor S on HV-3 → LV-3 → CH3
+[ ] Battery sensor S connected directly to MCP3008 CH3 (NOT through the LLC)
 [ ] MCP3008 VDD & VREF to 3.3V (not 5V)
 [ ] R_BURDEN 100Ω installed correctly in the pressure sensor loop, tapped directly to MCP3008 CH2
 [ ] Pressure sensor PSU isolated from Pi/buck converter 5V
