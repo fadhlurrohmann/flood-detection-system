@@ -167,7 +167,7 @@ class RainfallSensor:
             [hours]
         )
 
-        # sama seperti library Arduino
+        # same as the Arduino library
         time.sleep(0.10)
 
     def window_rainfall(self):

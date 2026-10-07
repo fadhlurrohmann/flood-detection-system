@@ -1,26 +1,26 @@
 """
 SIMCom A7670E / SIM7670E (LTE Cat-1 4G) controller via AT command - GPS/GNSS.
 
-CATATAN PENTING soal kompatibilitas AT command:
-  Modul A7670E/SIM7670E SECARA UMUM kompatibel dengan AT command set
-  SIM7600 untuk fungsi modem dasar (AT, AT+CSQ, AT+CREG?, AT+CGDCONT,
-  AT+CGPADDR), TAPI untuk GNSS/GPS perintahnya BERBEDA:
+IMPORTANT NOTE about AT command compatibility:
+  The A7670E/SIM7670E module is GENERALLY compatible with the AT command set
+  of the SIM7600 for basic modem functions (AT, AT+CSQ, AT+CREG?, AT+CGDCONT,
+  AT+CGPADDR), BUT for GNSS/GPS the commands are DIFFERENT:
 
-    SIM7600E   : AT+CGPS=1 / AT+CGPS=0   (nyalakan/matikan GPS engine)
-    A7670E/SIM7670E : AT+CGNSSPWR=1 / AT+CGNSSPWR=0  (nyalakan/matikan GNSS)
+    SIM7600E   : AT+CGPS=1 / AT+CGPS=0   (turn the GPS engine on/off)
+    A7670E/SIM7670E : AT+CGNSSPWR=1 / AT+CGNSSPWR=0  (turn GNSS on/off)
 
-  Sedangkan AT+CGPSINFO untuk membaca hasil fix formatnya SAMA di kedua
-  keluarga modul ini, jadi parser NMEA di bawah tetap dipakai apa adanya.
-  (Referensi: SIMCom A76XX Series AT Command Manual & GNSS Application Note)
+  Meanwhile AT+CGPSINFO, which reads the fix result, has the SAME format on both
+  module families, so the NMEA parser below is used as-is.
+  (Reference: SIMCom A76XX Series AT Command Manual & GNSS Application Note)
 
-Fitur:
-  - Diagnostik modem (signal, registrasi jaringan, IP)
-  - GPS: ambil koordinat lat/lon real dari antena GNSS modul
+Features:
+  - Modem diagnostics (signal, network registration, IP)
+  - GPS: get the real lat/lon coordinates from the module's GNSS antenna
 
-Alur AT command GNSS:
-  AT+CGNSSPWR=1   -> nyalakan GNSS engine (tunggu "+CGNSSPWR: READY!")
-  AT+CGPSINFO     -> baca NMEA fix (lat, lon, alt, kecepatan, arah, waktu)
-  AT+CGNSSPWR=0   -> matikan GNSS (opsional, hemat daya)
+GNSS AT command flow:
+  AT+CGNSSPWR=1   -> turn on the GNSS engine (wait for "+CGNSSPWR: READY!")
+  AT+CGPSINFO     -> read the NMEA fix (lat, lon, alt, speed, course, time)
+  AT+CGNSSPWR=0   -> turn off GNSS (optional, saves power)
 
 Requires: pip install pyserial
 """
@@ -38,13 +38,13 @@ logger = logging.getLogger("efws.sim7600")
 
 class SIM7600:
     """
-    Nama class dipertahankan 'SIM7600' untuk kompatibilitas import di
-    main.py - tapi command internal sudah disesuaikan untuk A7670E/SIM7670E.
+    The class name 'SIM7600' is kept for import compatibility in
+    main.py - but the internal commands have been adapted for the A7670E/SIM7670E.
     """
 
     def __init__(self, port=None, baudrate=None):
         if serial is None:
-            raise RuntimeError("pyserial tidak terinstall - pip install pyserial")
+            raise RuntimeError("pyserial is not installed - pip install pyserial")
         self.ser = serial.Serial(
             port or settings.SIM7600_AT_PORT,
             baudrate or settings.SIM7600_BAUDRATE,
@@ -52,21 +52,21 @@ class SIM7600:
         )
         self._gnss_on = False
 
-    # ─── AT command primitif ─────────────────────────────────────
+    # ─── AT command primitive ────────────────────────────────────
     def send_at(self, command: str, wait: float = 1.0) -> str:
-        """Kirim AT command, return response string."""
+        """Send an AT command, return the response string."""
         self.ser.reset_input_buffer()
         self.ser.write((command + "\r\n").encode())
         time.sleep(wait)
         raw = self.ser.read(self.ser.in_waiting or 1)
         return raw.decode(errors="ignore")
 
-    # ─── Diagnostik modem ────────────────────────────────────────
+    # ─── Modem diagnostics ───────────────────────────────────────
     def check_module(self) -> bool:
         return "OK" in self.send_at("AT")
 
     def signal_quality(self) -> str:
-        """AT+CSQ -> +CSQ: <rssi>,<ber>. rssi 0-31 (makin tinggi makin kuat), 99=tidak diketahui."""
+        """AT+CSQ -> +CSQ: <rssi>,<ber>. rssi 0-31 (higher is stronger), 99=unknown."""
         return self.send_at("AT+CSQ")
 
     def network_registration(self) -> str:
@@ -83,34 +83,34 @@ class SIM7600:
     # ─── GNSS / GPS (A7670E/SIM7670E command set) ─────────────────
     def gps_power_on(self) -> bool:
         """
-        Nyalakan GNSS engine A7670E/SIM7670E. Perlu 15-60 detik untuk fix
-        pertama (cold start) di luar ruangan dengan antena GNSS terpasang.
+        Turn on the A7670E/SIM7670E GNSS engine. Needs 15-60 seconds for the first
+        fix (cold start) outdoors with the GNSS antenna attached.
         """
         resp = self.send_at("AT+CGNSSPWR=1", wait=2.0)
         if "OK" in resp or "READY" in resp:
             self._gnss_on = True
-            logger.info("GNSS engine ON. Tunggu fix (cold: ~15-60 detik).")
+            logger.info("GNSS engine ON. Waiting for a fix (cold: ~15-60 seconds).")
             return True
-        logger.warning("GNSS power ON gagal: %s", resp.strip())
+        logger.warning("GNSS power ON failed: %s", resp.strip())
         return False
 
     def gps_power_off(self) -> bool:
-        """Matikan GNSS engine (hemat daya jika tidak dibutuhkan terus-menerus)."""
+        """Turn off the GNSS engine (saves power if it is not needed continuously)."""
         resp = self.send_at("AT+CGNSSPWR=0", wait=1.0)
         self._gnss_on = False
         return "OK" in resp
 
     def _parse_cgpsinfo(self, raw: str) -> dict | None:
         """
-        Parse respons AT+CGPSINFO (format sama untuk SIM7600 & A7670E/SIM7670E).
+        Parse the AT+CGPSINFO response (same format for SIM7600 & A7670E/SIM7670E).
 
-        Format NMEA:
+        NMEA format:
           +CGPSINFO: <lat>,<N/S>,<lon>,<E/W>,<date>,<utc_time>,<alt>,<speed>,<course>
 
-        Contoh ada fix:
+        Example with a fix:
           +CGPSINFO: 0114.5506,S,11649.5982,E,260625,033042.0,8.2,0.0,0.0
 
-        Contoh belum ada fix:
+        Example with no fix yet:
           +CGPSINFO: ,,,,,,,,
         """
         match = re.search(r"\+CGPSINFO:\s*([^\r\n]+)", raw)
@@ -119,11 +119,11 @@ class SIM7600:
 
         parts = [p.strip() for p in match.group(1).split(",")]
         if len(parts) < 9 or parts[0] == "":
-            return None   # belum ada fix
+            return None   # no fix yet
 
         try:
             def _nmea_to_dd(nmea: str, direction: str) -> float:
-                """Konversi NMEA ddmm.mmmm -> decimal degrees."""
+                """Convert NMEA ddmm.mmmm -> decimal degrees."""
                 dot = nmea.index(".")
                 deg = float(nmea[:dot - 2])
                 minutes = float(nmea[dot - 2:])
@@ -160,9 +160,9 @@ class SIM7600:
 
     def get_gps(self, timeout: int = 90, interval: float = 3.0) -> dict:
         """
-        Ambil koordinat GPS dari A7670E/SIM7670E.
-        Jika GNSS engine belum ON, akan dinyalakan otomatis.
-        Polling AT+CGPSINFO sampai ada fix atau timeout.
+        Get the GPS coordinates from the A7670E/SIM7670E.
+        If the GNSS engine is not ON yet, it is turned on automatically.
+        Polls AT+CGPSINFO until there is a fix or a timeout.
 
         Return dict:
           fix=True  -> {"fix": True, "lat": float, "lon": float, ...}
@@ -170,9 +170,9 @@ class SIM7600:
         """
         if not self._gnss_on:
             if not self.gps_power_on():
-                return {"fix": False, "reason": "GNSS engine gagal dinyalakan"}
+                return {"fix": False, "reason": "GNSS engine failed to turn on"}
 
-        logger.info("Menunggu GNSS fix (timeout %ds)...", timeout)
+        logger.info("Waiting for a GNSS fix (timeout %ds)...", timeout)
         elapsed = 0.0
 
         while elapsed < timeout:
@@ -188,17 +188,17 @@ class SIM7600:
                 )
                 return result
 
-            logger.debug("Belum ada fix (%.0fs/%.0fs)...", elapsed, timeout)
+            logger.debug("No fix yet (%.0fs/%.0fs)...", elapsed, timeout)
             time.sleep(interval)
             elapsed += interval + 1.0
 
         return {
             "fix":    False,
-            "reason": f"Timeout {timeout}s - pastikan antena GNSS terpasang dan langit terbuka",
+            "reason": f"Timeout {timeout}s - make sure the GNSS antenna is attached and the sky is open",
         }
 
     def get_gps_location(self) -> "tuple[float, float] | None":
-        """Shortcut: return (lat, lon) atau None jika tidak ada fix."""
+        """Shortcut: return (lat, lon) or None if there is no fix."""
         result = self.get_gps()
         if result.get("fix"):
             return result["lat"], result["lon"]
@@ -210,9 +210,9 @@ class SIM7600:
         self.ser.close()
 
 
-# ─── Mock GPS untuk mode testing ─────────────────────────────────
+# ─── Mock GPS for testing mode ───────────────────────────────────
 class MockSIM7600:
-    """Dipakai saat RUN_MODE=mock - tidak butuh hardware A7670E/SIM7670E."""
+    """Used when RUN_MODE=mock - needs no A7670E/SIM7670E hardware."""
     _gnss_on = False
 
     def gps_power_on(self) -> bool:
@@ -247,7 +247,7 @@ class MockSIM7600:
 
 
 if __name__ == "__main__":
-    # Test langsung: python communication/sim7600.py
+    # Direct test: python communication/sim7600.py
     import json
     modem = SIM7600()
     print("Module:", modem.check_module())

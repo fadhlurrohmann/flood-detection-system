@@ -1,14 +1,14 @@
 """
-TEST — Modul Sensor Tegangan DC 0-25V (baterai, lewat MCP3008 CH3)
+TEST — DC 0-25V Voltage Sensor Module (battery, via MCP3008 CH3)
 
-Cek dulu sebelum run:
-  ls /dev/spidev*  → harus ada /dev/spidev0.0
-  Pin S modul tersambung LANGSUNG ke MCP3008 CH3
-  GND modul (sisi output, pin −) tersambung ke GND Pi / MCP3008 (ground bersama)
+Check before running:
+  ls /dev/spidev*  → /dev/spidev0.0 must exist
+  The module's S pin is connected DIRECTLY to MCP3008 CH3
+  The module's GND (output side, − pin) is connected to the Pi / MCP3008 GND (common ground)
 
-Tiap baris menampilkan 50 sampel cepat: raw min/median/max, tegangan di pin
-MCP3008 (V_pin), dan tegangan baterai hasil hitungan. Di akhir ada diagnosis
-otomatis kalau pembacaannya tidak stabil.
+Each line shows 50 fast samples: raw min/median/max, the voltage at the
+MCP3008 pin (V_pin), and the computed battery voltage. At the end there is an
+automatic diagnosis if the reading is unstable.
 
 Usage: python3 tests/test_battery.py
 """
@@ -26,8 +26,8 @@ print("=" * 60)
 
 sensor = BatterySensor()
 print(f"VREF={sensor.vref}V  divider_ratio={sensor.ratio}  "
-      f"(V_baterai = raw/1023 × {sensor.vref} × {sensor.ratio})")
-print("Membaca 5x, tiap 2 detik (Ctrl+C untuk stop lebih awal)...\n")
+      f"(V_battery = raw/1023 × {sensor.vref} × {sensor.ratio})")
+print("Reading 5x, every 2 seconds (Ctrl+C to stop early)...\n")
 
 all_samples = []
 try:
@@ -41,7 +41,7 @@ try:
               f"  V_pin={v_pin:.3f}V  voltage={v_bat}V  percent={sensor.voltage_to_percent(v_bat)}%")
         time.sleep(2)
 except KeyboardInterrupt:
-    print("\nDihentikan oleh user.")
+    print("\nStopped by the user.")
 
 if not all_samples:
     sys.exit(0)
@@ -50,16 +50,16 @@ spread = max(all_samples) - min(all_samples)
 v_pin  = statistics.median(all_samples) / 1023 * sensor.vref
 print()
 if spread > 30 or v_pin < 0.3:
-    print(f"❌ Pembacaan TIDAK STABIL (selisih raw {spread}, V_pin median {v_pin:.2f}V).")
-    print("   Input CH3 'mengambang' — MCP3008 tidak melihat tegangan yang jelas. Cek:")
-    print("   1. GND modul (pin − sisi output) tersambung ke GND Pi / MCP3008 pin 14 (AGND)?")
-    print("   2. Kabel S benar ke MCP3008 pin 4 (= CH3; pin 1 di sebelah tanda titik/lekukan)?")
-    print("   3. Multimeter: MCP3008 pin 4 terhadap pin 14 harus ≈ V_baterai / 5 (mis. 2.65V).")
-    print("   4. Tes ADC: jumper CH3 ke 3.3V → raw ≈ 1023; jumper CH3 ke GND → raw ≈ 0.")
-    print("      Kalau ini juga acak → masalah di wiring MCP3008 (VDD/VREF/AGND/DGND/SPI).")
+    print(f"❌ The reading is UNSTABLE (raw spread {spread}, median V_pin {v_pin:.2f}V).")
+    print("   The CH3 input is 'floating' — the MCP3008 does not see a clear voltage. Check:")
+    print("   1. Is the module's GND (− pin on the output side) connected to the Pi GND / MCP3008 pin 14 (AGND)?")
+    print("   2. Is the S wire really on MCP3008 pin 4 (= CH3; pin 1 is next to the dot/notch)?")
+    print("   3. Multimeter: MCP3008 pin 4 relative to pin 14 should be ≈ V_battery / 5 (e.g. 2.65V).")
+    print("   4. ADC test: jumper CH3 to 3.3V → raw ≈ 1023; jumper CH3 to GND → raw ≈ 0.")
+    print("      If this is random too → the problem is in the MCP3008 wiring (VDD/VREF/AGND/DGND/SPI).")
 elif v_pin > 3.2:
-    print(f"❌ V_pin {v_pin:.2f}V mentok di ~3.3V — CH3 ditarik ke 3.3V oleh sambungan lain.")
-    print("   Pastikan pin 4 MCP3008 HANYA tersambung ke pin S modul (ukur pin 4 vs pin 14 ≈ 2.65V).")
+    print(f"❌ V_pin {v_pin:.2f}V is pinned at ~3.3V — CH3 is being pulled to 3.3V by another connection.")
+    print("   Make sure MCP3008 pin 4 is connected ONLY to the module's S pin (measure pin 4 vs pin 14 ≈ 2.65V).")
 else:
-    print(f"✅ Stabil (selisih raw {spread}). Bandingkan voltage di atas dengan multimeter di")
-    print("   terminal baterai; kalau beda, set EFWS_BATTERY_DIVIDER_RATIO = V_baterai / V_pin_S.")
+    print(f"✅ Stable (raw spread {spread}). Compare the voltage above with a multimeter on the")
+    print("   battery terminals; if it differs, set EFWS_BATTERY_DIVIDER_RATIO = V_battery / V_pin_S.")

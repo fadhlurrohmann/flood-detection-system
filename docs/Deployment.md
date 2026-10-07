@@ -228,7 +228,7 @@ nano .env
 
 ## Troubleshooting per components
 
-| Components | Gejala | Possibly penyebab |
+| Components | Symptom | Possible cause |
 |----------|--------|------------------------|
 | MCP3008 | `test_mcp3008.py` failed open SPI | SPI not active yet in raspi-config; `spidev` not yet terinstall; wiring CLK/DOUT/DIN/CS wrong |
 | BME280 | `i2cdetect -y 1` NOT appear 0x76 | I2C not active yet; wiring SDA/SCL reversed; address actually 0x77 (set `EFWS_BME280_ADDR=0x77`) |

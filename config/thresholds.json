@@ -1,12 +1,12 @@
 {
-  "_doc": "Hardcoded FALLBACK thresholds — dipakai HANYA kalau backend belum pernah mengirim 'config' di response /sensors/telemetry, atau field tertentu di 'config' bernilai null. Begitu backend pernah mengirim config yang valid untuk sebuah field, nilai remote itu yang dipakai (lihat config/threshold_resolver.py). Bentuk JSON ini SENGAJA dibuat identik dengan bentuk 'config' dari API supaya fallback-nya per-field, bukan all-or-nothing.",
+  "_doc": "Hardcoded FALLBACK thresholds — used ONLY if the backend has never sent a 'config' in the /sensors/telemetry response, or a given field in 'config' is null. Once the backend has sent a valid config for a field, that remote value is used (see config/threshold_resolver.py). The shape of this JSON is DELIBERATELY identical to the shape of the API 'config' so the fallback is per-field, not all-or-nothing.",
 
   "waterDangerThreshold": 0.5,
-  "_waterDangerThreshold_note": "Ketinggian air (m) di tandon/reservoir. Nilai DI BAWAH ini = air menipis (evaluasi lower_is_worse). API contoh mengirim null untuk field ini di sejumlah device -- kalau null, angka lokal ini yang dipakai.",
+  "_waterDangerThreshold_note": "Water height (m) in the tank/reservoir. A value BELOW this = water running low (evaluated as lower_is_worse). The example API sends null for this field on some devices -- if null, this local number is used.",
 
   "alarm": {
     "consecutive_readings_required": 3,
     "cooldown_seconds": 300,
-    "_note": "Sirine lokal (relay) baru menyala setelah N pembacaan CONSECUTIVE melewati danger threshold berturut-turut. Ini independen dari pengiriman emergency upload ke backend."
+    "_note": "The local siren (relay) only sounds after N CONSECUTIVE readings cross the danger threshold in a row. This is independent of sending the emergency upload to the backend."
   }
 }

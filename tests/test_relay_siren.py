@@ -1,9 +1,9 @@
 """
-TEST 7 — Relay 5V + Sirine 12V/24V/220V 120dB (dengan LED flasher)
+TEST 7 — 5V Relay + 12V/24V/220V 120dB Siren (with LED flasher)
 
-⚠️  PERINGATAN: Sirine ini 120dB - SANGAT KERAS. Pastikan Anda siap
-    sebelum menjalankan test ini (tutup telinga / jaga jarak / beri tahu
-    orang sekitar). Test ini akan benar-benar menyalakan sirine fisik.
+⚠️  WARNING: This siren is 120dB - VERY LOUD. Make sure you are ready
+    before running this test (cover your ears / keep your distance / tell
+    the people around you). This test will actually sound the physical siren.
 
 Usage: python3 tests/test_relay_siren.py
 """
@@ -15,41 +15,41 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from alarm.siren import AlarmController
 
 print("=" * 60)
-print("  TEST Relay + Sirine 12V (120dB)")
+print("  TEST Relay + 12V Siren (120dB)")
 print("=" * 60)
-print("⚠️  Sirine akan BERBUNYI KERAS pada test ini.")
-confirm = input("Ketik 'ya' untuk lanjut, atau Enter untuk batal: ").strip().lower()
-if confirm != "ya":
-    print("Dibatalkan.")
+print("⚠️  The siren will sound LOUDLY in this test.")
+confirm = input("Type 'yes' to continue, or press Enter to cancel: ").strip().lower()
+if confirm != "yes":
+    print("Cancelled.")
     sys.exit(0)
 
 try:
     ctrl = AlarmController()
-    print("\n[OK] Relay diinisialisasi.\n")
+    print("\n[OK] Relay initialised.\n")
 except Exception as e:
-    print(f"[FAIL] Gagal inisialisasi relay: {e}")
+    print(f"[FAIL] Failed to initialise the relay: {e}")
     sys.exit(1)
 
 try:
-    print("Tahap 1: Relay ON langsung 2 detik (cek bunyi 'klik' relay + sirine menyala)...")
+    print("Stage 1: Relay ON straight for 2 seconds (listen for the relay 'click' + the siren turning on)...")
     ctrl.relay.on()
     time.sleep(2)
     ctrl.relay.off()
-    print("Tahap 1 selesai - relay OFF.\n")
+    print("Stage 1 finished - relay OFF.\n")
     time.sleep(1)
 
-    print("Tahap 2: Level WARNING selama 5 detik (sirine berdenyut pelan 0.4s ON/1.6s OFF)...")
+    print("Stage 2: WARNING level for 5 seconds (siren pulses slowly 0.4s ON/1.6s OFF)...")
     ctrl.set_level(AlarmController.LEVEL_WARNING)
     time.sleep(5)
 
-    print("Tahap 3: Level CRITICAL selama 3 detik (sirine menyala TERUS)...")
+    print("Stage 3: CRITICAL level for 3 seconds (siren stays on CONTINUOUSLY)...")
     ctrl.set_level(AlarmController.LEVEL_CRITICAL)
     time.sleep(3)
 
 finally:
     ctrl.silence()
-    print("\n[SELESAI] Alarm dimatikan (relay OFF).")
-    print("Kalau sirine tidak bunyi sama sekali, cek:")
-    print("  - Wiring relay COM/NO ke jalur 12V sirine (lihat docs/Pinout.md)")
-    print("  - active_low salah (coba Relay(active_low=False) di alarm/relay.py)")
-    print("  - Sumber 12V untuk sirine belum tersambung/aktif")
+    print("\n[DONE] Alarm turned off (relay OFF).")
+    print("If the siren does not sound at all, check:")
+    print("  - The relay COM/NO wiring to the siren's 12V line (see docs/Pinout.md)")
+    print("  - Wrong active_low (try Relay(active_low=False) in alarm/relay.py)")
+    print("  - The 12V source for the siren is not connected/active")

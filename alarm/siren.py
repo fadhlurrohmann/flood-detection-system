@@ -1,17 +1,17 @@
 """
-AlarmController - mengendalikan relay yang men-switch sirine 12V/24V/220V
-120dB dengan LED flasher bawaan.
+AlarmController - controls the relay that switches the 12V/24V/220V
+120dB siren with built-in LED flasher.
 
-Tidak ada buzzer terpisah di hardware (sesuai daftar komponen) - jadi
-2 tingkat eskalasi dibuat HANYA dari satu relay yang sama:
+There is no separate buzzer in the hardware (per the component list) - so
+the 2 escalation levels are built ONLY from the same single relay:
 
-  WARNING  -> sirine berdenyut pelan (nyala 0.4s / mati 1.6s) sebagai
-              pre-alarm yang masih bisa "diabaikan" sebentar
-  CRITICAL -> sirine menyala TERUS-MENERUS (siaga penuh)
+  WARNING  -> siren pulses slowly (on 0.4s / off 1.6s) as a
+              pre-alarm that can still be "ignored" for a short while
+  CRITICAL -> siren stays on CONTINUOUSLY (full alert)
 
-Pulsing untuk level WARNING dijalankan di background thread supaya tidak
-memblokir loop utama main.py (yang tetap perlu lanjut baca sensor & kirim
-data tiap beberapa detik sementara alarm WARNING aktif).
+The pulsing for the WARNING level runs in a background thread so it does not
+block the main.py main loop (which still needs to keep reading sensors and
+sending data every few seconds while the WARNING alarm is active).
 """
 import threading
 import time
@@ -56,7 +56,7 @@ class AlarmController:
             return
         self.current_level = level
 
-        # Selalu hentikan dulu pola pulsing lama sebelum set state baru
+        # Always stop the old pulsing pattern first before setting the new state
         self._stop_pulse()
 
         if level == self.LEVEL_NONE:
@@ -71,16 +71,16 @@ class AlarmController:
 
 
 if __name__ == "__main__":
-    # Test cepat manual: python alarm/siren.py
+    # Quick manual test: python alarm/siren.py
     ctrl = AlarmController()
     try:
-        print("WARNING selama 5 detik (denyut pelan)...")
+        print("WARNING for 5 seconds (slow pulse)...")
         ctrl.set_level(AlarmController.LEVEL_WARNING)
         time.sleep(5)
 
-        print("CRITICAL selama 5 detik (nyala terus)...")
+        print("CRITICAL for 5 seconds (continuously on)...")
         ctrl.set_level(AlarmController.LEVEL_CRITICAL)
         time.sleep(5)
     finally:
         ctrl.silence()
-        print("Alarm dimatikan.")
+        print("Alarm turned off.")

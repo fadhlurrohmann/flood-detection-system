@@ -1,14 +1,14 @@
 """
-Modul Sensor Tegangan DC 0-25V — monitoring baterai (voltage divider bawaan modul).
-Pin S langsung ke MCP3008 CH3.
+DC 0-25V Voltage Sensor Module — battery monitoring (the module's built-in voltage divider).
+Pin S goes straight to MCP3008 CH3.
 
-Input : terhubung langsung ke terminal Battery+ dan Battery-
-Output: pin S → 0-5V proporsional terhadap tegangan input (0-25V)
+Input : connected directly to the Battery+ and Battery- terminals
+Output: pin S → 0-5V proportional to the input voltage (0-25V)
 
-Kalkulasi:
+Calculation:
   V_s       = raw / 1023 × MCP3008_VREF
-  V_battery = V_s × BATTERY_DIVIDER_RATIO        (modul 30k/7.5k → ÷5)
-  Baterai 14.4V → V_s 2.88V, masih di bawah VREF 3.3V.
+  V_battery = V_s × BATTERY_DIVIDER_RATIO        (30k/7.5k module → ÷5)
+  A 14.4V battery → V_s 2.88V, still below VREF 3.3V.
 """
 import statistics
 
@@ -17,7 +17,7 @@ from sensors.mcp3008 import get_mcp3008
 
 
 class BatterySensor:
-    SAMPLES = 9   # median dari N sampel cepat → buang spike noise ADC
+    SAMPLES = 9   # median of N fast samples → discard ADC noise spikes
 
     def __init__(self, channel=None, divider_ratio=None, vref=None, batt_max_v=None, batt_min_v=None):
         self.channel      = channel      if channel      is not None else settings.ADC_CHANNEL_BATTERY
@@ -46,7 +46,7 @@ class BatterySensor:
         return self.voltage_to_percent(self.read_voltage())
 
     def read(self) -> dict:
-        v = self.read_voltage()   # satu pembacaan → voltage & percent konsisten
+        v = self.read_voltage()   # one reading → voltage & percent stay consistent
         return {"voltage": v, "percent": self.voltage_to_percent(v)}
 
 

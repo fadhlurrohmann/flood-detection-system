@@ -1,12 +1,12 @@
 """
-Driver Relay 5V - relay ini menyambungkan sirine 12V/24V/220V 120dB
-(dengan LED flasher bawaan) ke sumber daya 12V.
-Kebanyakan modul relay murah aktif-LOW di pin IN (LOW = energized/closed).
-Set active_low=False jika modul Anda aktif-HIGH.
+5V relay driver - this relay connects the 12V/24V/220V 120dB siren
+(with built-in LED flasher) to the 12V power source.
+Most cheap relay modules are active-LOW on the IN pin (LOW = energized/closed).
+Set active_low=False if your module is active-HIGH.
 
-Kebanyakan modul relay (dengan optocoupler) sudah kompatibel logic 3.3V,
-jadi BIASANYA tidak perlu logic level converter untuk jalur kontrolnya -
-tapi cek datasheet modul relay Anda untuk pastikan (lihat docs/Pinout.md).
+Most relay modules (with an optocoupler) are already 3.3V logic compatible,
+so a logic level converter is USUALLY not needed for the control line -
+but check your relay module's datasheet to be sure (see docs/Pinout.md).
 """
 from config import settings
 
@@ -21,7 +21,7 @@ class Relay:
         self.pin = pin if pin is not None else settings.GPIO_RELAY_SIREN
         self.active_low = active_low
         if GPIO is None:
-            raise RuntimeError("RPi.GPIO tidak tersedia - jalankan ini di Raspberry Pi")
+            raise RuntimeError("RPi.GPIO is not available - run this on a Raspberry Pi")
         GPIO.setmode(GPIO.BCM)
         GPIO.setup(self.pin, GPIO.OUT)
         self.off()

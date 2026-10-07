@@ -2,25 +2,25 @@
 # =============================================================================
 # EWS Communication Check (check_comm.sh)
 # =============================================================================
-# Tujuan: verifikasi end-to-end jalur komunikasi EFWS -- BUKAN cuma cek
-# apakah nmcli/gsm-connect sukses, tapi:
+# Purpose: verify the EFWS communication path end-to-end -- NOT just whether
+# nmcli/gsm-connect succeeded, but:
 #
-#   1. Jalankan detect_sim() ASLI dari komunikasi/sim_detector.py (kode
-#      produksi Anda sendiri) untuk memastikan modul A7670E atau SIM7600
-#      benar-benar terbaca, sinyalnya berapa, dan sudah registrasi ke
-#      jaringan atau belum.
-#   2. Cek apakah ModemManager & profil GSM sudah pakai interface yang
-#      benar (cdc-wdm, bukan port serial yang dipakai app).
-#   3. Cek status Tailscale -- apakah accept-routes/exit-node aktif
-#      (yang bisa geser default route) dan apakah DNS di-takeover.
-#   4. Tes resolusi DNS + reachability nyata ke EFWS_API_URL, sekaligus
-#      tunjukkan lewat interface mana traffic itu benar-benar keluar.
+#   1. Run the REAL detect_sim() from communication/sim_detector.py (your own
+#      production code) to make sure the A7670E or SIM7600 module is
+#      actually read, what its signal is, and whether it has registered
+#      on the network yet.
+#   2. Check whether ModemManager & the GSM profile use the right
+#      interface (cdc-wdm, not the serial port the app uses).
+#   3. Check the Tailscale status -- whether accept-routes/exit-node is active
+#      (which can shift the default route) and whether DNS is taken over.
+#   4. Test DNS resolution + real reachability to EFWS_API_URL, and at the
+#      same time show which interface that traffic actually leaves through.
 #
-# PENTING: Jalankan skrip ini SAAT efws.service SEDANG BERHENTI.
-# Kenapa: sim_detector.py membuka /dev/ttyUSB* secara eksklusif via
-# pyserial. Kalau efws.service masih jalan dan sudah pegang port itu,
-# skrip ini akan gagal buka port yang sama (port busy) -- itu BUKAN
-# berarti modemnya rusak, cuma karena dua proses rebutan port yang sama.
+# IMPORTANT: Run this script WHILE efws.service is STOPPED.
+# Why: sim_detector.py opens /dev/ttyUSB* exclusively via
+# pyserial. If efws.service is still running and already holds that port,
+# this script will fail to open the same port (port busy) -- that does NOT
+# mean the modem is broken, only that two processes are fighting over the same port.
 #
 # Usage:
 #   sudo systemctl stop efws
@@ -43,26 +43,26 @@ f()    { printf '  \033[1;31m[FAIL]\033[0m %s\n' "$*";   fail=$((fail+1)); }
 info() { printf '  %s\n' "$*"; }
 
 # =============================================================================
-# 0. Guard: pastikan efws.service tidak sedang pegang port serial
+# 0. Guard: make sure efws.service is not holding the serial port
 # =============================================================================
-log "0. Cek status efws.service"
+log "0. Check the efws.service status"
 if systemctl is-active --quiet efws; then
-    w "efws.service SEDANG JALAN. Ini bisa bikin sim_detector.py di bawah gagal buka port (busy)."
-    info "Disarankan: sudo systemctl stop efws   (lalu start lagi setelah selesai diagnostik)"
+    w "efws.service is RUNNING. This can make sim_detector.py below fail to open the port (busy)."
+    info "Recommended: sudo systemctl stop efws   (then start it again after the diagnostics)"
 else
-    ok "efws.service tidak sedang berjalan -- aman untuk tes port serial."
+    ok "efws.service is not running -- safe to test the serial port."
 fi
 
 # =============================================================================
-# 1. ModemManager: modem terdeteksi? primary port apa?
+# 1. ModemManager: is the modem detected? What is the primary port?
 # =============================================================================
-log "1. ModemManager & primary port modem"
+log "1. ModemManager & the modem's primary port"
 
 MODEM_ID=$(mmcli -L 2>/dev/null | grep -oP 'Modem/\K[0-9]+' | head -n1 || true)
 if [ -z "$MODEM_ID" ]; then
-    f "mmcli tidak menemukan modem sama sekali. Cek 'lsusb' dan 'ls /dev/ttyUSB*'."
+    f "mmcli found no modem at all. Check 'lsusb' and 'ls /dev/ttyUSB*'."
 else
-    ok "Modem terdeteksi ModemManager, ID=$MODEM_ID"
+    ok "Modem detected by ModemManager, ID=$MODEM_ID"
     MM_INFO=$(mmcli -m "$MODEM_ID" --output-keyvalue 2>/dev/null)
 
     PRIMARY_PORT=$(echo "$MM_INFO" | grep -oP 'modem\.generic\.primary-port\s*:\s*\K.*' | tr -d '[:space:]' || true)
@@ -74,33 +74,33 @@ else
     info "Modem state   : ${STATE:-unknown}"
 
     case "$PRIMARY_PORT" in
-        cdc-wdm*) ok "Primary port pakai cdc-wdm (QMI) -- terpisah dari port serial AT, aman dari bentrok dengan app." ;;
-        "")       w "Tidak bisa baca primary-port dari mmcli." ;;
-        *)        f "Primary port ($PRIMARY_PORT) BUKAN cdc-wdm. Kemungkinan modem mode PPP/AT -- risiko rebutan port dengan sim_detector.py TINGGI." ;;
+        cdc-wdm*) ok "The primary port uses cdc-wdm (QMI) -- separate from the AT serial port, safe from conflicts with the app." ;;
+        "")       w "Could not read the primary-port from mmcli." ;;
+        *)        f "The primary port ($PRIMARY_PORT) is NOT cdc-wdm. The modem is probably in PPP/AT mode -- the risk of a port fight with sim_detector.py is HIGH." ;;
     esac
 
     if [ "$STATE" = "locked" ]; then
-        f "Modem berstatus 'locked' -- SIM kemungkinan butuh PIN."
+        f "The modem's state is 'locked' -- the SIM probably needs a PIN."
     fi
 
-    # Profil koneksi GSM: cek ifname yang sebenarnya dipakai
+    # GSM connection profile: check the ifname that is actually used
     CONN_IFACE=$(nmcli -g connection.interface-name connection show "$CONNECTION_NAME" 2>/dev/null || true)
     if [ -n "$CONN_IFACE" ]; then
-        info "Profil '$CONNECTION_NAME' pakai interface-name: ${CONN_IFACE:-<auto/any>}"
+        info "Profile '$CONNECTION_NAME' uses interface-name: ${CONN_IFACE:-<auto/any>}"
         if [ -n "$PRIMARY_PORT" ] && [ "$CONN_IFACE" != "$PRIMARY_PORT" ] && [ "$CONN_IFACE" != "*" ] && [ -n "$CONN_IFACE" ]; then
-            w "Interface profil ($CONN_IFACE) beda dengan primary-port modem ($PRIMARY_PORT) -- cek konfigurasi gsm_connect.sh."
+            w "The profile interface ($CONN_IFACE) differs from the modem primary-port ($PRIMARY_PORT) -- check the gsm_connect.sh configuration."
         fi
     fi
 fi
 
 # =============================================================================
-# 2. Jalankan detect_sim() ASLI dari kode aplikasi -- ini benar-benar
-#    menjalankan "bagian communication"-nya, bukan simulasi.
+# 2. Run the REAL detect_sim() from the application code -- this really
+#    runs the "communication part", not a simulation.
 # =============================================================================
-log "2. Jalankan communication/sim_detector.py (detect_sim, force_scan)"
+log "2. Run communication/sim_detector.py (detect_sim, force_scan)"
 
 if [ ! -x "$VENV_PYTHON" ]; then
-    f "Tidak menemukan venv python di $VENV_PYTHON -- sesuaikan PROJECT_DIR di atas skrip ini."
+    f "Could not find the venv python at $VENV_PYTHON -- adjust PROJECT_DIR at the top of this script."
 else
     cd "$PROJECT_DIR" || exit 1
     DETECT_OUTPUT=$("$VENV_PYTHON" - <<'PYEOF' 2>&1
@@ -128,117 +128,117 @@ PYEOF
     echo "$DETECT_OUTPUT" | sed 's/^/  /'
 
     if echo "$DETECT_OUTPUT" | grep -q "RESULT::MOCK_MODE"; then
-        w "EFWS_RUN_MODE=mock di .env -- sim_detector tidak dites ke hardware asli. Set EFWS_RUN_MODE=hardware untuk tes ini."
+        w "EFWS_RUN_MODE=mock in .env -- sim_detector is not tested against real hardware. Set EFWS_RUN_MODE=hardware for this test."
     elif echo "$DETECT_OUTPUT" | grep -q "RESULT::OK"; then
-        ok "detect_sim() berhasil -- modul dan port terbaca."
+        ok "detect_sim() succeeded -- the module and port were read."
         if echo "$DETECT_OUTPUT" | grep -qi "REGISTRATION::.*+CREG: [0-9],1\|REGISTRATION::.*+CREG: [0-9],5"; then
-            ok "Modem sudah registrasi ke jaringan (home/roaming)."
+            ok "The modem has registered on the network (home/roaming)."
         else
-            w "Status registrasi tidak menunjukkan home/roaming -- cek sinyal/APN/SIM."
+            w "The registration status does not show home/roaming -- check the signal/APN/SIM."
         fi
     else
-        f "detect_sim() gagal. Lihat pesan error di atas (kemungkinan port busy kalau efws.service masih jalan, atau modem memang tidak terdeteksi)."
+        f "detect_sim() failed. See the error message above (probably port busy if efws.service is still running, or the modem is really not detected)."
     fi
 fi
 
 # =============================================================================
-# 3. Tailscale: pastikan tidak menggeser default route, cek status DNS
+# 3. Tailscale: make sure it does not shift the default route, check the DNS status
 # =============================================================================
 log "3. Tailscale"
 
 if ! command -v tailscale >/dev/null 2>&1; then
-    info "Tailscale tidak terinstall di sistem ini -- lewati pengecekan."
+    info "Tailscale is not installed on this system -- skipping the check."
 else
     if ! systemctl is-active --quiet tailscaled; then
-        w "tailscaled terinstall tapi tidak aktif."
+        w "tailscaled is installed but not active."
     else
-        ok "tailscaled aktif."
+        ok "tailscaled is active."
         TS_STATUS=$(tailscale status --json 2>/dev/null || true)
 
         if echo "$TS_STATUS" | grep -q '"ExitNodeStatus"'; then
             EXIT_NODE=$(echo "$TS_STATUS" | grep -oP '"ExitNodeStatus"\s*:\s*\K[^,}]*' || true)
         fi
 
-        # Cek prefs: AcceptRoutes / ExitNodeID lewat 'tailscale debug prefs' kalau tersedia
+        # Check prefs: AcceptRoutes / ExitNodeID via 'tailscale debug prefs' if available
         TS_PREFS=$(tailscale debug prefs 2>/dev/null || true)
         if echo "$TS_PREFS" | grep -qi '"RouteAll": *true\|"AcceptRoutes": *true'; then
-            w "Tailscale AcceptRoutes aktif -- kalau salah satu tailnet peer advertise 0.0.0.0/0 (exit node), ini BISA menggeser default route menjauh dari GSM/WiFi. Pastikan ini memang disengaja."
+            w "Tailscale AcceptRoutes is active -- if one of the tailnet peers advertises 0.0.0.0/0 (exit node), this CAN shift the default route away from GSM/WiFi. Make sure this is intended."
         else
-            ok "AcceptRoutes tidak terindikasi aktif -- default route GSM/WiFi tidak terganggu Tailscale."
+            ok "AcceptRoutes is not indicated as active -- the GSM/WiFi default route is not disturbed by Tailscale."
         fi
 
         if echo "$TS_PREFS" | grep -qi '"ExitNodeID": *""' || ! echo "$TS_PREFS" | grep -qi '"ExitNodeID"'; then
-            ok "Tidak sedang memakai exit node -- default route aman."
+            ok "Not using an exit node -- the default route is safe."
         else
-            w "Tampaknya sedang memakai Tailscale exit node -- SEMUA traffic (termasuk ke EFWS_API_URL) akan lewat tailnet, bukan lewat GSM langsung."
+            w "It looks like a Tailscale exit node is in use -- ALL traffic (including to EFWS_API_URL) will go through the tailnet, not directly through GSM."
         fi
 
         # DNS takeover check
         if command -v resolvectl >/dev/null 2>&1; then
             RESOLV_INFO=$(resolvectl status 2>/dev/null || true)
             if echo "$RESOLV_INFO" | grep -q "100.100.100.100"; then
-                info "Tailscale MagicDNS (100.100.100.100) aktif sebagai salah satu DNS server."
-                w "Kalau resolusi hostname EFWS_API_URL tiba-tiba lambat/gagal padahal koneksi GSM sehat, coba: sudo tailscale set --accept-dns=false lalu tes ulang."
+                info "Tailscale MagicDNS (100.100.100.100) is active as one of the DNS servers."
+                w "If resolving the EFWS_API_URL hostname suddenly becomes slow/fails even though the GSM connection is healthy, try: sudo tailscale set --accept-dns=false and test again."
             else
-                ok "Tailscale tidak mengambil alih DNS resolver global."
+                ok "Tailscale is not taking over the global DNS resolver."
             fi
         fi
     fi
 fi
 
 # =============================================================================
-# 4. Default route + DNS + reachability nyata ke EFWS_API_URL
+# 4. Default route + DNS + real reachability to EFWS_API_URL
 # =============================================================================
-log "4. Default route, DNS, dan reachability ke EFWS_API_URL"
+log "4. Default route, DNS, and reachability to EFWS_API_URL"
 
 ROUTE_INFO=$(ip route get 8.8.8.8 2>&1 || true)
 info "$ROUTE_INFO"
 ACTIVE_IFACE=$(echo "$ROUTE_INFO" | grep -oP 'dev \K[^ ]+' | head -n1 || true)
-info "Interface aktif untuk internet saat ini: ${ACTIVE_IFACE:-tidak diketahui}"
+info "Interface currently active for the internet: ${ACTIVE_IFACE:-unknown}"
 
 if [ "$ACTIVE_IFACE" = "cdc-wdm0" ] || echo "$ACTIVE_IFACE" | grep -q "wwan\|cdc-wdm"; then
-    ok "Default route lewat modem GSM (sesuai prioritas yang diinginkan)."
+    ok "The default route goes through the GSM modem (per the desired priority)."
 elif [ -n "$ACTIVE_IFACE" ]; then
-    w "Default route saat ini lewat '$ACTIVE_IFACE' (bukan GSM). Kalau GSM sedang tersambung juga, cek ulang route-metric-nya."
+    w "The default route currently goes through '$ACTIVE_IFACE' (not GSM). If GSM is also connected, re-check its route-metric."
 fi
 
-# Ambil EFWS_API_URL dari .env project untuk tes langsung
+# Get EFWS_API_URL from the project .env for a direct test
 API_URL=$(grep -m1 '^EFWS_API_URL=' "$PROJECT_DIR/.env" 2>/dev/null | cut -d= -f2- | sed -e 's/\r$//' -e "s/^['\"]//" -e "s/['\"]$//")
 if [ -z "$API_URL" ]; then
-    w "Tidak menemukan EFWS_API_URL di $PROJECT_DIR/.env -- lewati tes reachability endpoint."
+    w "Could not find EFWS_API_URL in $PROJECT_DIR/.env -- skipping the endpoint reachability test."
 else
     API_HOST=$(echo "$API_URL" | sed -E 's#^[a-zA-Z]+://##; s#[/:].*$##')
-    info "Endpoint dari .env : $API_URL"
-    info "Host yang di-resolve: $API_HOST"
+    info "Endpoint from .env : $API_URL"
+    info "Host being resolved: $API_HOST"
 
     if command -v getent >/dev/null 2>&1; then
         DNS_RESULT=$(getent hosts "$API_HOST" 2>&1 || true)
         if [ -n "$DNS_RESULT" ]; then
-            ok "DNS resolve sukses: $DNS_RESULT"
+            ok "DNS resolve succeeded: $DNS_RESULT"
         else
-            f "DNS resolve GAGAL untuk $API_HOST. Cek resolver aktif (resolvectl status) atau APN operator."
+            f "DNS resolve FAILED for $API_HOST. Check the active resolver (resolvectl status) or the operator APN."
         fi
     fi
 
     if command -v curl >/dev/null 2>&1; then
         HTTP_CODE=$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 "$API_URL" 2>&1 || true)
         if [ -n "$HTTP_CODE" ] && [ "$HTTP_CODE" != "000" ]; then
-            ok "Endpoint dapat dihubungi (HTTP $HTTP_CODE) lewat interface $ACTIVE_IFACE."
+            ok "The endpoint can be reached (HTTP $HTTP_CODE) through interface $ACTIVE_IFACE."
         else
-            f "Gagal reach $API_URL (curl exit/HTTP: $HTTP_CODE). Cek koneksi & firewall APN."
+            f "Failed to reach $API_URL (curl exit/HTTP: $HTTP_CODE). Check the connection & the APN firewall."
         fi
     fi
 fi
 
 # =============================================================================
-# Ringkasan
+# Summary
 # =============================================================================
-log "Ringkasan"
+log "Summary"
 info "OK=$pass  WARN=$warn  FAIL=$fail"
 if [ "$fail" -gt 0 ]; then
-    info "Ada kegagalan yang perlu ditindaklanjuti sebelum yakin jalur komunikasi sehat."
+    info "There are failures to follow up on before you can be sure the communication path is healthy."
 elif [ "$warn" -gt 0 ]; then
-    info "Tidak ada kegagalan fatal, tapi ada beberapa hal untuk diperiksa manual (lihat WARN di atas)."
+    info "No fatal failures, but there are a few things to check manually (see the WARN lines above)."
 else
-    info "Semua pengecekan lolos."
+    info "All checks passed."
 fi

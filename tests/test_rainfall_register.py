@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 
 """
-Dump seluruh register penting Rainfall Sensor.
+Dump all the important Rainfall Sensor registers.
 
-Tidak menggunakan driver.
-Langsung membaca register I2C.
+Does not use the driver.
+Reads the I2C registers directly.
 
-CTRL+C untuk berhenti.
+CTRL+C to stop.
 """
 
 import time

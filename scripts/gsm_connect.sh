@@ -2,23 +2,23 @@
 # =============================================================================
 # EWS GSM Auto Connect (v2)
 # =============================================================================
-# Perubahan utama dari versi sebelumnya:
-#   1. Menunggu modem BENAR-BENAR teregistrasi ke jaringan operator (3GPP
-#      attach), bukan cuma menunggu modem terdeteksi oleh ModemManager.
-#   2. `nmcli connection up` dicoba beberapa kali (retry+backoff), dan
-#      setiap percobaan diverifikasi dengan mengecek default route benar2
-#      lewat interface modem -- bukan asal exit 0.
-#   3. Semua langkah kritikal dicatat dengan status jelas (OK/WARN/FAIL)
-#      dan timestamp, tidak ada lagi `|| true` yang membungkam kegagalan.
-#   4. Dicek juga status SIM (locked/PIN) supaya kalau SIM ke-lock, itu
-#      langsung kelihatan di log alih-alih diam-diam gagal connect.
-#   5. Exit code skrip TETAP selalu 0 di akhir (lihat bagian "EXIT POLICY"
-#      di bawah) -- ini SENGAJA dipertahankan sama seperti versi lama,
-#      supaya efws.service (yang memakai Requires=gsm-connect.service)
-#      tetap start walau GSM gagal total, dan EFWS bisa jalan pakai
-#      offline queue / WiFi backup. Yang berubah bukan exit code-nya,
-#      tapi APAKAH GSM benar-benar connect atau tidak sekarang tercatat
-#      jelas di journal (journalctl -u gsm-connect).
+# Main changes from the previous version:
+#   1. Waits for the modem to be TRULY registered on the operator network (3GPP
+#      attach), not just for the modem to be detected by ModemManager.
+#   2. `nmcli connection up` is tried several times (retry+backoff), and
+#      each attempt is verified by checking that the default route really goes
+#      through the modem interface -- not just an exit 0.
+#   3. All critical steps are logged with a clear status (OK/WARN/FAIL)
+#      and a timestamp, no more `|| true` silencing failures.
+#   4. The SIM status (locked/PIN) is also checked so that if the SIM gets locked, it
+#      shows up in the log right away instead of silently failing to connect.
+#   5. The script's exit code STILL always ends at 0 (see the "EXIT POLICY" section
+#      below) -- this is DELIBERATELY kept the same as the old version,
+#      so efws.service (which uses Requires=gsm-connect.service)
+#      still starts even if GSM fails completely, and EFWS can run using the
+#      offline queue / WiFi backup. What changed is not the exit code,
+#      but WHETHER GSM actually connected or not is now clearly
+#      recorded in the journal (journalctl -u gsm-connect).
 # =============================================================================
 
 set -u
@@ -28,14 +28,14 @@ DEFAULT_APN="internet"
 MODEM_METRIC=50
 WIFI_METRIC=600
 
-MODEM_WAIT_ATTEMPTS=30       # tunggu modem terdeteksi: 30 x 2s = 60s
-REGISTRATION_WAIT_ATTEMPTS=30 # tunggu attach ke jaringan: 30 x 2s = 60s
-CONNECT_ATTEMPTS=4            # percobaan nmcli connection up
-CONNECT_RETRY_DELAY=5         # jeda antar percobaan (detik)
+MODEM_WAIT_ATTEMPTS=30       # wait for the modem to be detected: 30 x 2s = 60s
+REGISTRATION_WAIT_ATTEMPTS=30 # wait to attach to the network: 30 x 2s = 60s
+CONNECT_ATTEMPTS=4            # nmcli connection up attempts
+CONNECT_RETRY_DELAY=5         # pause between attempts (seconds)
 
 # -----------------------------------------------------------------------
-# Logging helper -- semua log punya timestamp + level, masuk ke journald
-# lewat StandardOutput=journal di service file, jadi bisa dilihat dengan:
+# Logging helper -- every log has a timestamp + level, and goes to journald
+# through StandardOutput=journal in the service file, so it can be viewed with:
 #   journalctl -u gsm-connect -b
 # -----------------------------------------------------------------------
 log() {
@@ -48,33 +48,33 @@ log INFO "Starting GSM auto connect..."
 systemctl is-active --quiet ModemManager || systemctl start ModemManager
 systemctl is-active --quiet NetworkManager || systemctl start NetworkManager
 
-nmcli radio wwan on || log WARN "Gagal mengaktifkan radio wwan (mungkin sudah on)"
+nmcli radio wwan on || log WARN "Failed to enable the wwan radio (maybe it is already on)"
 
 # Create GSM connection profile if not exists
 if ! nmcli connection show "$CONNECTION_NAME" >/dev/null 2>&1; then
-    log INFO "Membuat profil GSM baru: $CONNECTION_NAME"
+    log INFO "Creating a new GSM profile: $CONNECTION_NAME"
     if ! nmcli connection add type gsm ifname "*" con-name "$CONNECTION_NAME" apn "$DEFAULT_APN"; then
-        log FAIL "Gagal membuat profil GSM. Cek apakah plugin NetworkManager-gsm terpasang."
+        log FAIL "Failed to create the GSM profile. Check whether the NetworkManager-gsm plugin is installed."
     fi
 fi
 
 # -----------------------------------------------------------------------
-# STEP 1: Tunggu modem terdeteksi oleh ModemManager
+# STEP 1: Wait for the modem to be detected by ModemManager
 # -----------------------------------------------------------------------
 MODEM_ID=""
 for i in $(seq 1 "$MODEM_WAIT_ATTEMPTS"); do
     MODEM_ID=$(mmcli -L 2>/dev/null | grep -oP 'Modem/\K[0-9]+' | head -n1 || true)
     if [ -n "$MODEM_ID" ]; then
-        log INFO "Modem terdeteksi: ID=$MODEM_ID (percobaan $i)"
+        log INFO "Modem detected: ID=$MODEM_ID (attempt $i)"
         break
     fi
-    log INFO "Menunggu modem terdeteksi... ($i/$MODEM_WAIT_ATTEMPTS)"
+    log INFO "Waiting for the modem to be detected... ($i/$MODEM_WAIT_ATTEMPTS)"
     sleep 2
 done
 
 if [ -z "$MODEM_ID" ]; then
-    log FAIL "Modem TIDAK terdeteksi setelah $((MODEM_WAIT_ATTEMPTS*2))s. Cek koneksi USB/serial modem."
-    log WARN "Melanjutkan tanpa GSM -- sistem akan bergantung pada WiFi (jika ada)."
+    log FAIL "Modem NOT detected after $((MODEM_WAIT_ATTEMPTS*2))s. Check the modem's USB/serial connection."
+    log WARN "Continuing without GSM -- the system will depend on WiFi (if any)."
 fi
 
 APN="$DEFAULT_APN"
@@ -84,15 +84,15 @@ REGISTERED=false
 if [ -n "$MODEM_ID" ]; then
 
     if ! mmcli -m "$MODEM_ID" --enable >/dev/null 2>&1; then
-        log WARN "mmcli --enable gagal atau modem sudah enabled, lanjut cek status."
+        log WARN "mmcli --enable failed or the modem is already enabled, continuing to check the status."
     fi
     sleep 3
 
-    # -- Cek status SIM (locked / missing) supaya kegagalan SIM tidak
-    #    ketutup diam-diam seperti sebelumnya.
+    # -- Check the SIM status (locked / missing) so that a SIM failure is not
+    #    silently covered up like before.
     SIM_STATUS=$(mmcli -m "$MODEM_ID" --output-keyvalue 2>/dev/null | grep "modem.generic.state" | cut -d= -f2 | tr -d ' ' || true)
     if [ "$SIM_STATUS" = "locked" ]; then
-        log FAIL "Modem dalam status 'locked' -- kemungkinan SIM butuh PIN. GSM tidak akan bisa connect sampai ini dibereskan manual (mmcli -m $MODEM_ID --pin=XXXX)."
+        log FAIL "The modem is in the 'locked' state -- the SIM probably needs a PIN. GSM will not be able to connect until this is sorted out manually (mmcli -m $MODEM_ID --pin=XXXX)."
     fi
 
     OPERATOR_CODE=$(mmcli -m "$MODEM_ID" --output-keyvalue 2>/dev/null | grep "modem.3gpp.operator-code" | cut -d= -f2 | tr -d ' ' || true)
@@ -106,37 +106,37 @@ if [ -n "$MODEM_ID" ]; then
         *)       PROVIDER="Default";          APN="$DEFAULT_APN" ;;
     esac
 
-    log INFO "Provider terdeteksi : $PROVIDER (operator-code: ${OPERATOR_CODE:-unknown})"
-    log INFO "APN yang dipakai    : $APN"
+    log INFO "Provider detected : $PROVIDER (operator-code: ${OPERATOR_CODE:-unknown})"
+    log INFO "APN in use        : $APN"
 
     # -------------------------------------------------------------------
-    # STEP 2: Tunggu modem BENAR-BENAR attach ke jaringan operator.
-    # Ini bagian yang HILANG di versi lama -- versi lama cuma menunggu
-    # modem "terdeteksi", lalu langsung nmcli connection up. Padahal
-    # antara "modem terdeteksi" dan "modem attach ke jaringan seluler"
-    # (registration-state = home/roaming) bisa butuh 10-40 detik lagi,
-    # terutama kalau sinyal lemah. Kalau nmcli up dipanggil sebelum ini
-    # selesai, ia gampang timeout -- dan versi lama membungkam error itu
-    # dengan `|| true` sehingga kelihatan "berhasil" padahal tidak.
+    # STEP 2: Wait for the modem to be TRULY attached to the operator network.
+    # This is the part that was MISSING in the old version -- the old version only waited
+    # for the modem to be "detected", then went straight to nmcli connection up. Yet
+    # between "modem detected" and "modem attached to the cellular network"
+    # (registration-state = home/roaming) it can take another 10-40 seconds,
+    # especially if the signal is weak. If nmcli up is called before this
+    # finishes, it easily times out -- and the old version silenced that error
+    # with `|| true` so it looked "successful" when it was not.
     # -------------------------------------------------------------------
     for i in $(seq 1 "$REGISTRATION_WAIT_ATTEMPTS"); do
         REG_STATE=$(mmcli -m "$MODEM_ID" --output-keyvalue 2>/dev/null | grep "modem.3gpp.registration-state" | cut -d= -f2 | tr -d ' ' || true)
         if [ "$REG_STATE" = "home" ] || [ "$REG_STATE" = "roaming" ]; then
-            log INFO "Modem teregistrasi ke jaringan operator (state: $REG_STATE), percobaan $i"
+            log INFO "Modem registered on the operator network (state: $REG_STATE), attempt $i"
             REGISTERED=true
             break
         fi
-        log INFO "Menunggu registrasi ke jaringan seluler... state saat ini: ${REG_STATE:-unknown} ($i/$REGISTRATION_WAIT_ATTEMPTS)"
+        log INFO "Waiting for registration on the cellular network... current state: ${REG_STATE:-unknown} ($i/$REGISTRATION_WAIT_ATTEMPTS)"
         sleep 2
     done
 
     if [ "$REGISTERED" = false ]; then
-        log FAIL "Modem tidak berhasil attach ke jaringan operator dalam $((REGISTRATION_WAIT_ATTEMPTS*2))s. Sinyal mungkin lemah atau SIM bermasalah."
+        log FAIL "The modem did not manage to attach to the operator network within $((REGISTRATION_WAIT_ATTEMPTS*2))s. The signal may be weak or the SIM has a problem."
     fi
 fi
 
 # -----------------------------------------------------------------------
-# Configure GSM connection profile (metric rendah = prioritas utama)
+# Configure GSM connection profile (low metric = top priority)
 # -----------------------------------------------------------------------
 nmcli connection modify "$CONNECTION_NAME" \
     gsm.apn "$APN" \
@@ -145,57 +145,57 @@ nmcli connection modify "$CONNECTION_NAME" \
     ipv4.method auto \
     ipv4.route-metric "$MODEM_METRIC" \
     ipv6.method ignore \
-    || log FAIL "Gagal memodifikasi profil koneksi $CONNECTION_NAME"
+    || log FAIL "Failed to modify the connection profile $CONNECTION_NAME"
 
 # -----------------------------------------------------------------------
-# Configure WiFi as backup (metric tinggi = prioritas rendah, TAPI tetap
-# auto-connect supaya dipakai kalau GSM gagal total). Bagian ini TIDAK
-# butuh WiFi untuk ada -- kalau tidak ada profil WiFi tersimpan, loop di
-# bawah cuma jalan atas daftar kosong dan tidak melakukan apa-apa. Jadi
-# ketiadaan WiFi TIDAK menghalangi langkah-langkah GSM di atas maupun di
-# bawah sama sekali.
+# Configure WiFi as backup (high metric = low priority, BUT still
+# auto-connect so it is used if GSM fails completely). This part does NOT
+# need WiFi to exist -- if there is no saved WiFi profile, the loop
+# below just runs over an empty list and does nothing. So the
+# absence of WiFi does NOT block the GSM steps above or
+# below at all.
 # -----------------------------------------------------------------------
 WIFI_CONNECTIONS=$(nmcli -t -f NAME,TYPE connection show | grep ":802-11-wireless" | cut -d: -f1 || true)
 
 if [ -z "$WIFI_CONNECTIONS" ]; then
-    log INFO "Tidak ada profil WiFi tersimpan -- lanjut hanya dengan GSM."
+    log INFO "No saved WiFi profile -- continuing with GSM only."
 else
     echo "$WIFI_CONNECTIONS" | while read -r WIFI_NAME; do
         if [ -n "$WIFI_NAME" ]; then
-            log INFO "Set WiFi sebagai backup: $WIFI_NAME"
+            log INFO "Set WiFi as backup: $WIFI_NAME"
             nmcli connection modify "$WIFI_NAME" \
                 connection.autoconnect yes \
                 connection.autoconnect-priority 0 \
                 ipv4.route-metric "$WIFI_METRIC" \
                 ipv6.route-metric "$WIFI_METRIC" \
-                || log WARN "Gagal memodifikasi profil WiFi $WIFI_NAME"
+                || log WARN "Failed to modify the WiFi profile $WIFI_NAME"
         fi
     done
 fi
 
 # -----------------------------------------------------------------------
-# STEP 3: Connect GSM dengan retry, dan VERIFIKASI hasilnya nyata --
-# bukan cuma "nmcli exit 0" tapi benar-benar cek default route lewat
-# interface modem. Ini juga bagian yang hilang di versi lama.
+# STEP 3: Connect GSM with retry, and VERIFY the real result --
+# not just "nmcli exit 0" but actually check that the default route goes through the
+# modem interface. This is also a part that was missing in the old version.
 # -----------------------------------------------------------------------
 GSM_CONNECTED=false
 
 for attempt in $(seq 1 "$CONNECT_ATTEMPTS"); do
-    log INFO "Menghubungkan GSM... percobaan $attempt/$CONNECT_ATTEMPTS"
+    log INFO "Connecting GSM... attempt $attempt/$CONNECT_ATTEMPTS"
 
     if nmcli connection up "$CONNECTION_NAME" >/dev/null 2>&1; then
         GSM_IFACE=$(nmcli -g GENERAL.DEVICES connection show "$CONNECTION_NAME" 2>/dev/null | head -n1)
         ROUTE_INFO=$(ip route get 8.8.8.8 2>/dev/null || true)
 
         if [ -n "$GSM_IFACE" ] && echo "$ROUTE_INFO" | grep -q "dev $GSM_IFACE"; then
-            log INFO "GSM connected. Default route terkonfirmasi lewat interface $GSM_IFACE."
+            log INFO "GSM connected. Default route confirmed through interface $GSM_IFACE."
             GSM_CONNECTED=true
             break
         else
-            log WARN "nmcli melaporkan sukses tapi default route BELUM lewat interface GSM ($GSM_IFACE). Mungkin masih tertahan WiFi metric atau belum dapat IP."
+            log WARN "nmcli reported success but the default route does NOT go through the GSM interface yet ($GSM_IFACE). It may still be held back by the WiFi metric or have no IP yet."
         fi
     else
-        log WARN "nmcli connection up gagal pada percobaan $attempt."
+        log WARN "nmcli connection up failed on attempt $attempt."
     fi
 
     if [ "$attempt" -lt "$CONNECT_ATTEMPTS" ]; then
@@ -204,29 +204,29 @@ for attempt in $(seq 1 "$CONNECT_ATTEMPTS"); do
 done
 
 if [ "$GSM_CONNECTED" = true ]; then
-    log INFO "STATUS AKHIR: GSM/SIM berhasil connect dan jadi jalur utama."
+    log INFO "FINAL STATUS: GSM/SIM connected successfully and is the primary path."
 else
-    log FAIL "STATUS AKHIR: GSM/SIM GAGAL connect setelah $CONNECT_ATTEMPTS percobaan."
+    log FAIL "FINAL STATUS: GSM/SIM FAILED to connect after $CONNECT_ATTEMPTS attempts."
     if [ -n "$WIFI_CONNECTIONS" ]; then
-        log WARN "Sistem akan mengandalkan WiFi sebagai fallback (jika WiFi berhasil connect)."
+        log WARN "The system will rely on WiFi as a fallback (if WiFi manages to connect)."
     else
-        log WARN "Tidak ada WiFi backup tersedia -- kemungkinan TIDAK ADA konektivitas internet sama sekali. EFWS akan jalan dengan offline queue."
+        log WARN "No WiFi backup available -- there is probably NO internet connectivity at all. EFWS will run with the offline queue."
     fi
 fi
 
 log INFO "Current route:"
-ip route get 8.8.8.8 2>&1 || log WARN "Tidak bisa resolve route ke 8.8.8.8 -- kemungkinan belum ada koneksi internet sama sekali."
+ip route get 8.8.8.8 2>&1 || log WARN "Cannot resolve the route to 8.8.8.8 -- there is probably no internet connection at all yet."
 
 log INFO "Done."
 
 # =============================================================================
-# EXIT POLICY (SENGAJA, jangan diubah tanpa update efws.service juga):
-# Skrip ini SELALU exit 0, walau GSM_CONNECTED=false. Ini konsisten
-# dengan versi lama, sesuai dependency `efws.service` yang pakai
-# `Requires=gsm-connect.service`. Kalau skrip ini exit non-zero, systemd
-# akan MEMBLOKIR efws.service sama sekali -- padahal EFWS punya
-# offline-queue dan tetap berguna berjalan lokal walau tanpa internet.
-# Yang membedakan dari versi lama: sekarang status sukses/gagal GSM
-# TERCATAT JELAS di journal, tidak lagi dibungkam oleh `|| true`.
+# EXIT POLICY (DELIBERATE, do not change it without updating efws.service too):
+# This script ALWAYS exits 0, even if GSM_CONNECTED=false. This is consistent
+# with the old version, per the `efws.service` dependency which uses
+# `Requires=gsm-connect.service`. If this script exits non-zero, systemd
+# will BLOCK efws.service entirely -- even though EFWS has an
+# offline queue and is still useful running locally without internet.
+# What differs from the old version: the GSM success/failure status is now
+# CLEARLY RECORDED in the journal, no longer silenced by `|| true`.
 # =============================================================================
 exit 0

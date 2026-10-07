@@ -1,10 +1,10 @@
 """
-TEST — Kirim semua fixture JSON ke /sensors/telemetry untuk verifikasi.
+TEST — Send all the JSON fixtures to /sensors/telemetry for verification.
 
-Berguna untuk:
-  - Konfirmasi format payload diterima API/backend dengan benar
-  - Lihat tampilan tiap skenario di webhook.site sebelum hardware terpasang
-  - Cek edge case tanpa perlu sensor asli
+Useful for:
+  - Confirming the payload format is accepted by the API/backend correctly
+  - Seeing how each scenario looks on webhook.site before the hardware is installed
+  - Checking edge cases without needing the real sensors
 
 Usage:
   python3 tests/test_json_fixtures.py
@@ -21,18 +21,18 @@ FIXTURES_DIR = os.path.join(os.path.dirname(__file__), "fixtures")
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--file",  default=None, help="Nama file fixture spesifik")
+    parser.add_argument("--file",  default=None, help="Name of a specific fixture file")
     parser.add_argument("--delay", type=float, default=0.3)
     args = parser.parse_args()
 
     print("=" * 60)
-    print("  TEST — POST Fixture JSON ke /sensors/telemetry")
+    print("  TEST — POST JSON Fixtures to /sensors/telemetry")
     print("=" * 60)
     print(f"Target : {settings.telemetry_endpoint()}\n")
 
     if "webhook.site/xxxxxxxx" in settings.API_BASE_URL:
-        print("[FAIL] EFWS_API_URL masih placeholder di .env")
-        print("Isi dengan URL dari https://webhook.site atau jalankan tools/mock_api_server.py")
+        print("[FAIL] EFWS_API_URL is still the placeholder in .env")
+        print("Fill it with a URL from https://webhook.site or run tools/mock_api_server.py")
         sys.exit(1)
 
     if args.file:
@@ -65,11 +65,11 @@ def main():
 
     api.close()
     print(f"\n{'='*60}")
-    print(f"Selesai: {ok_count}/{total} berhasil.")
+    print(f"Done: {ok_count}/{total} succeeded.")
     if ok_count == total:
-        print("✅ Semua fixture terkirim — cek webhook.site/mock server.")
+        print("✅ All fixtures sent — check webhook.site/the mock server.")
     else:
-        print("❌ Ada yang gagal — cek koneksi dan EFWS_API_URL di .env.")
+        print("❌ Some failed — check the connection and EFWS_API_URL in .env.")
 
 if __name__ == "__main__":
     main()
