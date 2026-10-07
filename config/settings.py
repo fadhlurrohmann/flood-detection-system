@@ -70,16 +70,16 @@ RUN_MODE = _opt("EFWS_RUN_MODE", "hardware")
 I2C_BUS        = _int("EFWS_I2C_BUS", 1)
 BME280_ADDRESS = int(_opt("EFWS_BME280_ADDR", "0x76"), 16)
 
-# ─── SPI / MCP3008 (ADC 8-channel, SATU Logic Level Converter) ─────────────
-# Versi hardware: 1x MCP3008, 1x LLC (min. 6-channel, mis. modul 8-ch),
-# MQ-2, MQ-135, anemometer RS485 (langsung USB, tanpa LLC),
+# ─── SPI / MCP3008 (ADC 8-channel, input analog langsung, TANPA LLC) ───────
+# Versi hardware: 1x MCP3008, 1x LLC (hanya untuk sinyal digital 5V → GPIO),
+# anemometer RS485 (langsung USB, tanpa LLC),
 # submersible pressure sensor (loop 4-20mA + burden resistor), modul sensor
 # tegangan baterai DC 0-25V, dan modem 4G (A7670E ATAU SIM7600 — auto-detect,
 # hanya satu yang dipasang).
 #
 #   Peta channel MCP3008:
 #     CH2 : Pressure sensor via R_BURDEN — langsung, TANPA LLC (maks ~2V)
-#     CH3 : Voltage Sensor Module S  — langsung, TANPA LLC (maks ~2.9V)
+#     CH3 : Voltage Sensor Module S  — langsung (maks ~2.9V)
 #     CH0, CH1, CH4-CH7 : spare, tidak dikabel
 SPI_BUS          = _int("EFWS_SPI_BUS", 0)
 SPI_DEVICE       = _int("EFWS_SPI_DEVICE", 0)
@@ -87,7 +87,7 @@ SPI_MAX_SPEED_HZ = _int("EFWS_SPI_SPEED", 1350000)
 MCP3008_VREF     = _float("EFWS_MCP3008_VREF", 3.3)
 
 ADC_CHANNEL_PRESSURE        = _int("EFWS_ADC_PRESSURE",      2)   # via R_BURDEN, tanpa LLC
-ADC_CHANNEL_BATTERY         = _int("EFWS_ADC_BATTERY",       3)   # voltage sensor module S, tanpa LLC
+ADC_CHANNEL_BATTERY         = _int("EFWS_ADC_BATTERY",       3)   # voltage sensor module S, langsung
 # CH0, CH1, CH4-CH7 tidak dikabel — spare fisik di MCP3008
 
 # ─── Gravity Rainfall Sensor (DFRobot SEN0575) ─────────────────────────────
@@ -153,7 +153,7 @@ def _base_url() -> str:
     return os.getenv("EFWS_API_URL", API_BASE_URL).rstrip("/")
 
 def telemetry_endpoint() -> str:
-    """Data sensor + smokeLevel dsb. Response-nya membawa 'config' (threshold remote)."""
+    """Data sensor (waterLevel, rainfallMm, dsb). Response-nya membawa 'config' (threshold remote)."""
     return _base_url() + "/sensors/telemetry"
 
 def location_endpoint() -> str:

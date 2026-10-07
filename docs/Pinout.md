@@ -1,8 +1,8 @@
 # EFWS — Output & Wiring Reference
 
 Final hardware:
-**Raspberry Pi 4 · MCP3008 (SPI ADC 8-ch) · 1x Logic Level Converter (min. 6-channel)
-· MQ-2 · MQ-135 · BME280 (I2C)
+**Raspberry Pi 4 · MCP3008 (SPI ADC 8-ch) · 1x Logic Level Converter (5V digital → GPIO only)
+· BME280 (I2C)
 · Submersible Pressure Sensor (4-20mA loop) · DC Voltage Sensor Module 0-25V (battery)
 · RS485 Anemometer · A7670E OR SIM7600 (auto-detect, only one installed)
 · 5V Relay · 12V Siren**
@@ -83,23 +83,43 @@ python3 tests/test_bme280.py
 | DIN (pin 11)  | GPIO10 (MOSI) | |
 | CS/SHDN (pin 10) | GPIO8 (CE0) | |
 | DGND (pin 9)  | Common GND | |
-| CH0-CH5 | See channel table below | All routed through LLC |
-| CH6-CH7 | Spare, not wired | |
+| CH2-CH3 | See channel table below | Wired directly — **no LLC** |
+| CH0, CH1, CH4-CH7 | Spare, not wired | |
 
 Verification: `ls /dev/spidev*` → should show `/dev/spidev0.0`
 
 ---
 
-## 4. MCP3008 Channel Map — ONE Logic Level Converter
+## 4. MCP3008 Channel Map — analog inputs connect DIRECTLY (no LLC)
 
-All 0-5V analog signals **must** pass through the LLC before entering the MCP3008 (VREF 3.3V).
-Use a bidirectional LLC module with at least 6 channels (for example, an 8-channel TXS0108E module — more commonly sold and leaves 2 channels for expansion).
+Every analog input must stay **below 3.3V** (MCP3008 VREF) and is wired **directly** to the
+MCP3008. Scale a higher voltage down with a resistor divider — **never route an analog signal
+through the LLC** (see "Why analog must not go through the LLC" below).
 
-| LLC | HV Side (5V) ← from sensor | LV Side (3.3V) → to MCP3008 | Channel |
-|-----|---------------------------|------------------------------|---------|
-| HV-1 / LV-1 | YF-S201 **AOUT** | NONE | water flow digital |
-|manual RESISTOR | Pressure sensor (via **R_BURDEN**) |  **CH2** | Water level (4-20mA loop) | Re
-| HV-7..8 / LV-7..8 | *(spare / expansion)* | CH0, CH1, CH4-CH7 | — |
+| Channel | Signal | Voltage at pin | Notes |
+|---------|--------|----------------|-------|
+| **CH2** | Pressure sensor (via **R_BURDEN** 100Ω) | 0.4-2.0V | Water level (4-20mA loop) |
+| **CH3** | Voltage Sensor Module **S** | battery ÷ 5 (~2.6V, max ~2.9V) | Battery voltage |
+| CH0, CH1, CH4-CH7 | *(spare / expansion)* | — | — |
+
+### Logic Level Converter — 5V DIGITAL signals into Pi GPIO only
+
+The LLC is only for **digital** (high/low) signals from 5V sensors going into Pi GPIO
+(max 3.3V). It does not connect to the MCP3008.
+
+| LLC | HV Side (5V) ← from sensor | LV Side (3.3V) → to | Notes |
+|-----|---------------------------|---------------------|-------|
+| HV-1 / LV-1 | YF-S201 signal (5V pulses) | Pi GPIO (`GPIO_YF`, default 16) | water flow digital |
+| other channels | *(spare)* — e.g. JSN-SR04T ECHO if the sensor runs on 5V | Pi GPIO | measure the signal first: 5V → via LLC, ≤3.3V → direct |
+
+**Why analog must not go through the LLC:** a typical BSS138 LLC board has a 10kΩ pull-up
+on every pin — HV pins to 5V, LV pins to 3.3V. A digital signal only needs "high" or "low",
+so the pull-ups don't matter there. An analog signal needs its exact voltage, and the
+pull-ups change it:
+- HV side: the pull-up drags the sensor voltage upward toward 5V.
+- LV side: any input above ~1.8V comes out as 3.3V ("high"), and an idle LV pin also
+  sits at 3.3V, so the exact voltage is lost.
+- TXS0108E-type LLCs are worse: their outputs snap to 0V or 3.3V.
 
 ### LLC Module Wiring
 
@@ -114,15 +134,6 @@ LLC:
 ---
 
 ## 5. Sensor-by-Sensor Wiring Details
-
-### MQ-2 (Smoke / Combustible Gas)
-| Sensor pin | Connect to |
-|-----------|------------|
-| VCC | 5V (directly from source, not from Pi GPIO 5V) |
-| GND | Common ground |
-| AOUT | LLC **HV-1** → LV-1 → MCP3008 **CH0** |
-
-> Heater ~150mA — power directly from buck converter, not from Pi GPIO 5V.
 
 ### YF-S201 (Water Flow Sensor)
 | Sensor pin | Connect to |
@@ -179,12 +190,9 @@ This module already includes an internal voltage divider (no need to build one y
 | IN+ | Battery+ terminal (12V LiFePO4 or similar) |
 | IN− | Battery− **after the BMS (P−)** — not the raw cell negative (B−) |
 | GND (output side) | Common ground |
-| S (output = battery ÷ 5) | MCP3008 **CH3** directly — **NOT through the LLC** |
+| S (output = battery ÷ 5) | MCP3008 **CH3** directly |
 
-**Why not through the LLC?** A BSS138 LLC board has a 10kΩ pull-up to 5V on every HV pin.
-It drags S upward (measured: battery 13.26V → S 3.53V instead of 2.65V), and the LV side
-clamps at ~3.3V, so every battery above ~11.4V reads the same. Without the LLC, S stays
-below 3.3V for any battery up to 16.5V (14.4V → 2.88V), so it is safe to connect directly.
+S stays below 3.3V for any battery up to 16.5V (14.4V → 2.88V), so it connects to CH3 directly.
 
 Formula: `V_battery = raw / 1023 × MCP3008_VREF × BATTERY_DIVIDER_RATIO` (default 5.0).
 To calibrate, measure the battery and S with a multimeter and set
@@ -270,7 +278,6 @@ A7670E / SIM7600 (USB) ──────────┤
 | BME280 | 3.3V | Pi 3.3V rail | I2C direct, no LLC |
 | LLC LV | 3.3V | Pi 3.3V rail | |
 | LLC HV | 5V | Buck converter / Pi 5V rail | |
-| MQ-2 / MQ-135 heater | 5V | Buck converter directly | ~150mA each |
 | Submersible pressure sensor | 12-24V (loop) | **Separate PSU**, not from Pi/buck 5V | Loop-powered |
 | Voltage sensor module (battery) | Passive, tapped from Battery+/− | — | No separate supply needed |
 | RS485 anemometer | 12V or 5V | According to unit datasheet | |
@@ -286,7 +293,9 @@ A7670E / SIM7600 (USB) ──────────┤
 [ ] SPI enabled (raspi-config → Interface → SPI)
 [ ] I2C enabled (raspi-config → Interface → I2C)
 [ ] Common ground: Pi, MCP3008, LLC, all sensors, relay, pressure PSU → one GND
-[ ] Battery sensor S connected directly to MCP3008 CH3 (NOT through the LLC)
+    (incl. the battery voltage module's output − pin — without it CH3 floats and reads random values)
+[ ] Battery sensor S connected directly to MCP3008 CH3
+[ ] No wire from any LLC LV pin to the MCP3008 (idle LV pins sit at 3.3V)
 [ ] MCP3008 VDD & VREF to 3.3V (not 5V)
 [ ] R_BURDEN 100Ω installed correctly in the pressure sensor loop, tapped directly to MCP3008 CH2
 [ ] Pressure sensor PSU isolated from Pi/buck converter 5V

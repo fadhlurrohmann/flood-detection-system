@@ -34,7 +34,6 @@ sample = {
         "timestamp":            datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z",
         "waterLevel":           3.3,
         "waterLevelCurrentMa":  14.6,
-        "smokeLevel":           9.8,
         "temp":                 29.5,
         "humidity":             63.0,
         "batteryLevel":         85.0,

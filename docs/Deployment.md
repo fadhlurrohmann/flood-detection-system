@@ -2,7 +2,7 @@
 
 This guide from NOL until EFWS running stabil in background, using
 real hardware: Raspberry Pi 4, MCP3008 (ADC SPI), Logic Level Converter,
-MQ-2, MQ-135, BME280, Submersible pressure sensor
+BME280, Submersible pressure sensor
 (4-20mA), Module sensor voltage DC 0-25V (battery), RS485 Anemometer,
 A7670E/SIM7600 (4G+GNSS, one only), Relay 5V + Siren 12V 120dB.
 
@@ -15,8 +15,9 @@ all sejajar with `main.py`.
 ## STAGE 0 — Wiring physical
 
 **REQUIRED read first**: `docs/Pinout.md` — contains tabel wiring complete per
-components, including note safety logic level converter (signal 5V
-sensor analog must through level converter before enter MCP3008/GPIO) and
+components, including note safety logic level converter (5V DIGITAL signals must go
+through the level converter before entering GPIO; ANALOG signals to the MCP3008
+must stay below 3.3V and connect directly, never through the LLC) and
 note safety route 12V siren.
 
 After all cable installed, **DO NOT directly Run code** — continue
@@ -135,31 +136,28 @@ If test #1 failed, all sensor analog afterward also will failed).
 # 1. MCP3008 first - foundation for all analog sensors
 python3 tests/test_mcp3008.py
 
-# 2. MQ-2 & MQ-135 (analog, through MCP3008)
-python3 tests/test_gas_sensors.py
-
-# 3. BME280 (I2C, independent from MCP3008)
+# 2. BME280 (I2C, independent from MCP3008)
 python3 tests/test_bme280.py
 
-# 4. Submersible pressure sensor (analog via burden resistor, through MCP3008)
+# 3. Submersible pressure sensor (analog via burden resistor, through MCP3008)
 python3 tests/test_pressure.py
 
-# 5. Battery voltage sensor (analog, through MCP3008)
+# 4. Battery voltage sensor (analog, through MCP3008)
 python3 tests/test_battery.py
 
-# 6. RS485 Anemometer
+# 5. RS485 Anemometer
 python3 tests/test_anemometer.py
 
-# 7. A7670E/SIM7600 - signal, SIM, GPS
+# 6. A7670E/SIM7600 - signal, SIM, GPS
 python3 tests/test_a7670e.py --gps-timeout 90
 
-# 8. Relay + Siren (⚠️ SUARA LOUD 120dB, read warning in the script)
+# 7. Relay + Siren (⚠️ SUARA LOUD 120dB, read warning in the script)
 python3 tests/test_relay_siren.py
 
-# 9. All sensors together, one read cycle (final check before main.py)
+# 8. All sensors together, one read cycle (final check before main.py)
 python3 tests/test_all_sensors.py
 
-# 10. Offline queue integrity (simulate signal loss and verify data is unchanged)
+# 9. Offline queue integrity (simulate signal loss and verify data is unchanged)
 python3 tests/test_offline_queue_integrity.py
 ```
 
@@ -233,8 +231,6 @@ nano .env
 | Components | Gejala | Possibly penyebab |
 |----------|--------|------------------------|
 | MCP3008 | `test_mcp3008.py` failed open SPI | SPI not active yet in raspi-config; `spidev` not yet terinstall; wiring CLK/DOUT/DIN/CS wrong |
-| MQ-2/MQ-135 | value always stuck in numeric same (clipping) | Forgot to install logic level converter in route analog path |
-| MQ-2/MQ-135 | ppm value is not sensible | Sensor has not warmed up (24-48 hours may be needed for full accuracy) |
 | BME280 | `i2cdetect -y 1` NOT appear 0x76 | I2C not active yet; wiring SDA/SCL reversed; address actually 0x77 (set `EFWS_BME280_ADDR=0x77`) |
 | Pressure sensor | `current_ma` always ~0, `fault_open_loop=True` | Loop disconnected/not yet connected, or PSU 12-24V loop not yet on — Run `python3 tests/test_pressure.py` for diagnosis |
 | Pressure sensor | `depth_m` NOT enter sense | `EFWS_PRESSURE_RANGE_M` not yet adapted datasheet sensor You |

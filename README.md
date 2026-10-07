@@ -4,7 +4,6 @@ IoT-based Flood Early Warning System using Raspberry Pi 4.
 
 ## Features
 
-- Smoke Detection (MQ-2 + MQ-135, combined smokeLevel)
 - Temperature & Humidity Monitoring (BME280)
 - Water Level Monitoring (submersible pressure sensor, 4-20mA loop)
 - Wind Speed Monitoring (RS485 Anemometer)
@@ -20,8 +19,7 @@ IoT-based Flood Early Warning System using Raspberry Pi 4.
 
 - Raspberry Pi 4
 - MCP3008 ADC (SPI)
-- 1x Logic Level Converter (min. 6-channel)
-- MQ-2, MQ-135
+- 1x Logic Level Converter (5V digital signals → GPIO only)
 - BME280 (I2C)
 - Submersible pressure sensor (4-20mA loop, water level)
 - DC 0-25V voltage sensor module (battery)
