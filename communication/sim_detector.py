@@ -1,26 +1,26 @@
 """
-SIM Auto-Detector — mendeteksi otomatis apakah node ini menggunakan
-modul A7670E/SIM7670E (LTE Cat-1) atau SIM7600 (LTE Cat-4/3G).
+SIM Auto-Detector — automatically detects whether this node uses an
+A7670E/SIM7670E (LTE Cat-1) or SIM7600 (LTE Cat-4/3G) module.
 
-Cara kerja:
-  1. Scan semua port /dev/ttyUSBx yang tersedia.
-  2. Kirim AT command ke tiap port; kalau ada yang merespons, cek identitas
-     modul lewat ATI (Product Identification Information).
-  3. A7670E/SIM7670E → instantiasi class A7670E (command GNSS: AT+CGNSSPWR)
-  4. SIM7600           → instantiasi class SIM7600 (command GNSS: AT+CGPS)
-  5. Hasil deteksi disimpan di .sim_cache (file teks) sehingga boot berikutnya
-     langsung ke port yang benar tanpa scan ulang.
+How it works:
+  1. Scan all available /dev/ttyUSBx ports.
+  2. Send an AT command to each port; if one responds, check the module identity
+     via ATI (Product Identification Information).
+  3. A7670E/SIM7670E → instantiate the A7670E class (GNSS command: AT+CGNSSPWR)
+  4. SIM7600           → instantiate the SIM7600 class (GNSS command: AT+CGPS)
+  5. The detection result is saved in .sim_cache (a text file) so the next boot
+     goes straight to the right port without rescanning.
 
-Kenapa dua class terpisah (bukan satu unified)?
-  AT command untuk GNSS berbeda antara A7670E dan SIM7600, dan
-  mencampur keduanya dalam satu class akan mengorbankan kejelasan kode.
-  Auto-detector ini menjadi jembatan — callers di main.py tidak perlu tahu
-  modul mana yang dipakai, karena interface publiknya sama.
+Why two separate classes (not one unified)?
+  The AT commands for GNSS differ between the A7670E and the SIM7600, and
+  mixing both in one class would sacrifice code clarity.
+  This auto-detector acts as the bridge — callers in main.py do not need to know
+  which module is used, because the public interface is the same.
 
 Usage:
   from communication.sim_detector import detect_sim, SimInterface
-  sim = detect_sim()              # auto-detect saat startup
-  coords = sim.get_gps()          # unified API, terlepas dari modul fisik
+  sim = detect_sim()              # auto-detect at startup
+  coords = sim.get_gps()          # unified API, regardless of the physical module
 """
 import os
 import time
@@ -44,9 +44,9 @@ BAUD       = 115200
 TIMEOUT    = 2
 
 
-# ─── ATI fingerprint → modul ─────────────────────────────────────────────────
-# Kata kunci yang muncul di respons ATI untuk masing-masing modul.
-# Tambahkan variant lain kalau ada modul SIMCom lain di project ini.
+# ─── ATI fingerprint → module ────────────────────────────────────────────────
+# Keywords that appear in the ATI response for each module.
+# Add other variants if there are other SIMCom modules in this project.
 _FINGERPRINTS = {
     "a7670e":  ["A7670E", "A7670", "SIM7670"],
     "sim7600": ["SIM7600", "SIM7600E", "SIM7600G"],
@@ -62,11 +62,11 @@ def _send_at(ser, cmd: str, wait: float = 1.0) -> str:
 
 def _identify_port(port: str) -> "str | None":
     """
-    Buka port, kirim AT, kirim ATI.
-    Return: "a7670e", "sim7600", atau None (tidak dikenali / tidak merespons).
+    Open the port, send AT, send ATI.
+    Return: "a7670e", "sim7600", or None (not recognised / not responding).
     """
     if serial is None:
-        raise RuntimeError("pyserial tidak terinstall - pip install pyserial")
+        raise RuntimeError("pyserial is not installed - pip install pyserial")
     try:
         ser = serial.Serial(port, BAUD, timeout=TIMEOUT)
         at_resp = _send_at(ser, "AT", wait=1.0)
@@ -81,8 +81,8 @@ def _identify_port(port: str) -> "str | None":
             if any(kw.upper() in ati_resp for kw in keywords):
                 return module_key
 
-        # Merespons AT tapi ATI tidak cocok fingerprint — kemungkinan modul SIMCom lain
-        logger.warning("Port %s merespons AT tapi tidak dikenali dari ATI: %s",
+        # Responds to AT but ATI does not match a fingerprint — probably another SIMCom module
+        logger.warning("Port %s responds to AT but is not recognised from ATI: %s",
                        port, ati_resp[:80])
         return None
 
@@ -107,36 +107,36 @@ def _identify_port(port: str) -> "str | None":
 
 def scan_ports() -> "dict | None":
     """
-    Scan semua kandidat port serial, return dict {port, module} saat ketemu,
-    atau None kalau tidak ada yang merespons.
+    Scan all candidate serial ports, return a dict {port, module} when one is found,
+    or None if none respond.
     """
-    # Gabungkan dengan hasil glob supaya dapat port yang tidak ada di SCAN_PORTS
+    # Merge with the glob result so ports that are not in SCAN_PORTS are included
     candidates = list(dict.fromkeys(
         SCAN_PORTS + sorted(glob.glob("/dev/ttyUSB*"))
     ))
 
-    logger.info("🔍 Scanning %d port kandidat untuk modul SIM...", len(candidates))
+    logger.info("🔍 Scanning %d candidate port(s) for a SIM module...", len(candidates))
     for port in candidates:
         if not os.path.exists(port):
             continue
-        logger.debug("  Mencoba %s ...", port)
+        logger.debug("  Trying %s ...", port)
         module = _identify_port(port)
         if module:
-            logger.info("  ✅ Modul %s ditemukan di %s", module.upper(), port)
+            logger.info("  ✅ Module %s found on %s", module.upper(), port)
             return {"port": port, "module": module}
 
-    logger.warning("❌ Tidak ada modul SIM yang terdeteksi di port manapun.")
+    logger.warning("❌ No SIM module detected on any port.")
     return None
 
 
 def _load_cache() -> "dict | None":
     try:
         data = json.loads(CACHE_FILE.read_text())
-        # Validasi port masih ada (bisa berubah setelah reboot)
+        # Validate that the port still exists (it can change after a reboot)
         if os.path.exists(data.get("port", "")):
             logger.info("📋 SIM cache: port=%s module=%s", data["port"], data["module"])
             return data
-        logger.info("Cache stale (port %s tidak ada), scan ulang...", data.get("port"))
+        logger.info("Cache stale (port %s does not exist), rescanning...", data.get("port"))
     except Exception:
         pass
     return None
@@ -152,13 +152,13 @@ def _save_cache(info: dict):
 def detect_sim(force_scan: bool = False) -> "SimInterface":
 
     if settings.RUN_MODE == "mock":
-        logger.info("Mode MOCK — pakai MockSimInterface.")
+        logger.info("MOCK mode — using MockSimInterface.")
         return MockSimInterface()
 
     info = None if force_scan else _load_cache()
 
     # ==========================
-    # VALIDASI CACHE
+    # CACHE VALIDATION
     # ==========================
 
     if info is not None:
@@ -174,20 +174,20 @@ def detect_sim(force_scan: bool = False) -> "SimInterface":
                 return sim
 
             logger.warning(
-                "Cache tidak valid (AT tidak merespons), scan ulang..."
+                "Cache not valid (AT does not respond), rescanning..."
             )
 
         except Exception as e:
 
             logger.warning(
-                "Cache gagal (%s), scan ulang...",
+                "Cache failed (%s), rescanning...",
                 e
             )
 
         info = None
 
     # ==========================
-    # SCAN ULANG
+    # RESCAN
     # ==========================
 
     if info is None:
@@ -199,7 +199,7 @@ def detect_sim(force_scan: bool = False) -> "SimInterface":
 
         else:
             raise RuntimeError(
-                "Tidak ada modul SIM yang terdeteksi."
+                "No SIM module detected."
             )
 
     return SimInterface(
@@ -210,13 +210,13 @@ def detect_sim(force_scan: bool = False) -> "SimInterface":
 
 class SimInterface:
     """
-    Wrapper unified di atas A7670E atau SIM7600 — callers tidak perlu tahu
-    modul mana yang dipakai, interface publiknya identik.
+    Unified wrapper over the A7670E or SIM7600 — callers do not need to know
+    which module is used, the public interface is identical.
     """
 
     def __init__(self, port: str, module: str):
         self.port   = port
-        self.module = module   # "a7670e" atau "sim7600"
+        self.module = module   # "a7670e" or "sim7600"
         self._drv   = self._init_driver(port, module)
         logger.info("SimInterface: %s @ %s", module.upper(), port)
 
@@ -228,9 +228,9 @@ class SimInterface:
             from communication.sim7600_legacy import SIM7600
             return SIM7600(port=port, baudrate=BAUD)
         else:
-            raise ValueError(f"Module tidak dikenal: {module}")
+            raise ValueError(f"Unknown module: {module}")
 
-    # ── Public API (sama untuk keduanya) ─────────────────────────
+    # ── Public API (same for both) ───────────────────────────────
     def get_gps(self, timeout: int = None, interval: float = 3.0) -> dict:
         t = timeout if timeout is not None else settings.GPS_TIMEOUT
         return self._drv.get_gps(timeout=t, interval=interval)
@@ -255,7 +255,7 @@ class SimInterface:
 
 
 class MockSimInterface:
-    """Dipakai saat RUN_MODE=mock — tidak butuh hardware apapun."""
+    """Used when RUN_MODE=mock — needs no hardware at all."""
     module = "mock"
     port   = "mock"
 

@@ -1,22 +1,22 @@
 """
-Driver MCP3008 (ADC 8-channel, 10-bit, via SPI) — menggantikan ADS1115.
+MCP3008 driver (8-channel, 10-bit ADC, via SPI) — replaces the ADS1115.
 
-MCP3008 dipakai karena Pi 4 tidak punya pin analog. Semua sensor analog
+The MCP3008 is used because the Pi 4 has no analog pins. All analog sensors
 (pressure sensor, battery voltage sensor)
-terhubung ke satu chip MCP3008 yang sama, dibaca lewat SPI hardware (SPI0, CE0).
+are connected to the same single MCP3008 chip, read over hardware SPI (SPI0, CE0).
 
-PENTING soal tegangan:
-  - MCP3008 VDD/VREF harus 3.3V (BUKAN 5V) karena terhubung langsung ke
-    Pi tanpa level shifter di sisi SPI.
-  - Tegangan di SETIAP channel harus < 3.3V (VREF). Sinyal yang lebih tinggi
-    diturunkan pakai pembagi tegangan (resistor), JANGAN lewat logic level
-    converter: pull-up 10k di modul LLC mengubah tegangan analog (sisi HV
-    ditarik ke 5V, sisi LV mentok/diam di 3.3V) → pembacaan salah.
+IMPORTANT about voltage:
+  - The MCP3008 VDD/VREF must be 3.3V (NOT 5V) because it is connected directly to
+    the Pi with no level shifter on the SPI side.
+  - The voltage on EVERY channel must be < 3.3V (VREF). Higher signals are
+    brought down with a voltage divider (resistors), do NOT use a logic level
+    converter: the 10k pull-up on the LLC module changes the analog voltage (the HV
+    side is pulled to 5V, the LV side stalls at 3.3V) → wrong readings.
 
-Pemetaan channel default (lihat docs/Pinout.md untuk detail wiring):
-  CH2 → Submersible pressure sensor, via burden resistor (langsung, TANPA LLC)
-  CH3 → Battery voltage sensor module (langsung, maks ~2.9V)
-  CH0, CH1, CH4-CH7 → cadangan/ekspansi
+Default channel mapping (see docs/Pinout.md for wiring details):
+  CH2 → Submersible pressure sensor, via burden resistor (direct, WITHOUT an LLC)
+  CH3 → Battery voltage sensor module (direct, max ~2.9V)
+  CH0, CH1, CH4-CH7 → spare/expansion
 
 Requires: pip install spidev
 """
@@ -32,11 +32,11 @@ except ImportError:
 
 
 class MCP3008:
-    """Satu instance merepresentasikan satu chip MCP3008 fisik di SPI0/CE0."""
+    """One instance represents one physical MCP3008 chip on SPI0/CE0."""
 
     def __init__(self, bus=None, device=None, max_speed_hz=None, vref=None):
         if spidev is None:
-            raise RuntimeError("spidev tidak terinstall - pip install spidev")
+            raise RuntimeError("spidev is not installed - pip install spidev")
 
         self.bus = bus if bus is not None else settings.SPI_BUS
         self.device = device if device is not None else settings.SPI_DEVICE
@@ -48,9 +48,9 @@ class MCP3008:
         self.spi.mode = 0b00
 
     def read_raw(self, channel: int) -> int:
-        """Baca channel 0-7, return nilai mentah 0-1023 (10-bit)."""
+        """Read channel 0-7, return the raw value 0-1023 (10-bit)."""
         if not 0 <= channel <= 7:
-            raise ValueError("MCP3008 channel harus 0-7")
+            raise ValueError("MCP3008 channel must be 0-7")
         cmd = [1, (8 + channel) << 4, 0]
         resp = self.spi.xfer2(cmd)
         value = ((resp[1] & 3) << 8) + resp[2]
@@ -65,9 +65,9 @@ class MCP3008:
 
 
 # ─── Singleton helper ──────────────────────────────────────────────
-# Semua sensor analog berbagi SATU chip MCP3008 fisik yang sama, jadi
-# semua sensor sebaiknya pakai instance SPI yang sama, bukan masing-
-# masing buka koneksi SPI sendiri-sendiri.
+# All analog sensors share the SAME single physical MCP3008 chip, so
+# all sensors should use the same SPI instance, rather than each
+# opening its own SPI connection.
 _instance = None
 
 
@@ -81,8 +81,8 @@ def get_mcp3008() -> "MCP3008":
 if __name__ == "__main__":
     import time
     adc = MCP3008()
-    print(f"MCP3008 dibuka di SPI bus={adc.bus} device={adc.device}, VREF={adc.vref}V")
-    print("Membaca semua 8 channel tiap 1 detik (Ctrl+C untuk stop)...\n")
+    print(f"MCP3008 opened on SPI bus={adc.bus} device={adc.device}, VREF={adc.vref}V")
+    print("Reading all 8 channels every 1 second (Ctrl+C to stop)...\n")
     try:
         while True:
             readings = [f"CH{c}={adc.read_voltage(c):.3f}V" for c in range(8)]

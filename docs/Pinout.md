@@ -42,27 +42,27 @@ sudo raspi-config
 ---
 ## 2. BME280 & Rainfall Sensors — I2C Wiring (ambient: temperature / humidity / pressure)
 
-### BME280 (ambient: suhu / kelembaban / tekanan)
-| Pin BME280 | Hubung ke |
+### BME280 (ambient: temperature / humidity / pressure)
+| BME280 pin | Connects to |
 |-----------|-----------|
 | VIN | Pi 3.3V |
-| GND | GND bersama |
+| GND | Common GND |
 | SCL | GPIO3 (Pin 5) |
 | SDA | GPIO2 (Pin 3) |
 
-Alamat I2C: `0x76` (atau `0x77` tergantung solder jumper modul).
+I2C address: `0x76` (or `0x77` depending on the module's solder jumper).
 
 ### DFRobot Gravity Rainfall Sensor (SEN0575) — Tipping Bucket
-| Pin sensor | Hubung ke |
+| Sensor pin | Connects to |
 |-----------|-----------|
 | VCC | Pi 3.3V |
-| GND | GND bersama |
-| SCL | GPIO3 (Pin 5) — **sama seperti BME280** |
-| SDA | GPIO2 (Pin 3) — **sama seperti BME280** |
+| GND | Common GND |
+| SCL | GPIO3 (Pin 5) — **same as the BME280** |
+| SDA | GPIO2 (Pin 3) — **same as the BME280** |
 
-Alamat I2C: `0x1D` (`RAINFALL_I2C_ADDRESS` di `config/settings.py`) —
-**beda dari BME280 (`0x76`/`0x77`)**, jadi wiring paralel di bus I2C yang
-sama aman, tidak perlu multiplexer.
+I2C address: `0x1D` (`RAINFALL_I2C_ADDRESS` in `config/settings.py`) —
+**different from the BME280 (`0x76`/`0x77`)**, so wiring them in parallel on the
+same I2C bus is safe, no multiplexer needed.
 
 ```bash
 i2cdetect -y 1     # should show 0x76 (or 0x77 if address differs)

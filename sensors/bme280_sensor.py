@@ -1,7 +1,7 @@
 """
 BME280 — Temperature / Humidity / Pressure ambient sensor (I2C).
-Dipakai untuk deteksi kondisi ambient (suhu tinggi + kelembaban rendah =
-risiko kebakaran meningkat). TIDAK lewat MCP3008/LLC — modul ini I2C native.
+Used to detect ambient conditions (high temperature + low humidity =
+increased fire risk). Does NOT go through the MCP3008/LLC — this module is native I2C.
 
 Requires: pip install smbus2 RPi.bme280
 """
@@ -18,7 +18,7 @@ except ImportError:
 class BME280Sensor:
     def __init__(self, bus=None, address=None):
         if smbus2 is None or _bme280_lib is None:
-            raise RuntimeError("smbus2/RPi.bme280 tidak terinstall - pip install smbus2 RPi.bme280")
+            raise RuntimeError("smbus2/RPi.bme280 is not installed - pip install smbus2 RPi.bme280")
 
         self.bus_num  = bus     if bus     is not None else settings.I2C_BUS
         self.address  = address if address is not None else settings.BME280_ADDRESS

@@ -580,7 +580,7 @@ Target:
 dev wlan0
 ```
 
-### Pasang modem again
+### Plug the modem in again
 
 Wait 60 seconds, then:
 

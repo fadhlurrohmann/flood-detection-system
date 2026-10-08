@@ -11,18 +11,18 @@ def main():
 
     try:
         while True:
-            jarak_m = sensor.read() 
-            if jarak_m is None:
-                print("Tidak ada echo dari sensor; periksa wiring dan catu daya.")
+            distance_m = sensor.read()
+            if distance_m is None:
+                print("No echo from the sensor; check the wiring and power supply.")
                 continue
 
-            jarak_cm = jarak_m * 100
+            distance_cm = distance_m * 100
 
-            print(f"Hasil Baca Jarak: {jarak_cm:.2f} cm  |  {jarak_m:.2f} m")
+            print(f"Distance reading: {distance_cm:.2f} cm  |  {distance_m:.2f} m")
             time.sleep(1)
 
     except KeyboardInterrupt:
-        print("Program selesai.")
+        print("Program finished.")
     finally:
         sensor.close()
 

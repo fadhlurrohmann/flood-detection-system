@@ -1,44 +1,44 @@
 """
-Threshold resolver — prioritas AKTIF threshold untuk evaluasi alarm.
+Threshold resolver — priority of the ACTIVE threshold for alarm evaluation.
 
-Aturan (sesuai requirement backend):
-    1. Kalau backend (via response /sensors/telemetry) pernah mengirim
-       'config' dan sebuah field di dalamnya TIDAK null -> pakai nilai itu.
-    2. Kalau belum pernah ada 'config' sama sekali, ATAU field tertentu di
-       config terakhir bernilai null/hilang -> pakai nilai hardcoded lokal
-       (config/thresholds.json) UNTUK FIELD ITU SAJA.
+Rules (per the backend requirement):
+    1. If the backend (via the /sensors/telemetry response) has ever sent a
+       'config' and a field inside it is NOT null -> use that value.
+    2. If there has never been any 'config', OR a given field in the latest
+       config is null/missing -> use the local hardcoded value
+       (config/thresholds.json) FOR THAT FIELD ONLY.
 
-Ini per-field, bukan all-or-nothing -- persis seperti contoh response API
-yang mengirim "waterDangerThreshold": null sementara field lain terisi:
-artinya HANYA water yang fallback ke lokal, field lain tetap pakai remote.
+This is per-field, not all-or-nothing -- exactly like the example API response
+that sends "waterDangerThreshold": null while the other fields are filled:
+it means ONLY water falls back to local, the other fields still use remote.
 
-'remote_config' di sini adalah dict MENTAH terakhir yang diterima dari
-field "config" pada response API (disimpan oleh APIPublisher.remote_config).
-Modul ini tidak menyimpan state apa pun sendiri -- murni fungsi merge.
+'remote_config' here is the RAW dict last received from the "config" field
+of the API response (stored by APIPublisher.remote_config).
+This module keeps no state of its own -- it is a pure merge function.
 """
 from typing import Any, Optional
 
 
 def _pick(remote_value: Any, local_value: Any) -> Any:
-    """Remote menang kalau ada dan bukan None; selain itu pakai lokal."""
+    """Remote wins if present and not None; otherwise use local."""
     return local_value if remote_value is None else remote_value
 
 
 def resolve_active_thresholds(local: dict, remote_config: Optional[dict]) -> dict:
     """
-    Gabungkan hardcoded local thresholds dengan remote config (kalau ada),
-    field per field. Selalu mengembalikan dict lengkap dengan bentuk yang
-    sama seperti `local` (jadi caller/_evaluate tidak perlu tahu asalnya).
+    Merge the hardcoded local thresholds with the remote config (if any),
+    field by field. Always returns a complete dict with the same shape
+    as `local` (so the caller/_evaluate does not need to know where it came from).
     """
     remote = remote_config or {}
 
-    resolved = dict(local)  # shallow copy cukup, semua field top-level scalar/dict kecil
+    resolved = dict(local)  # a shallow copy is enough, all top-level fields are scalars/small dicts
 
     resolved["waterDangerThreshold"] = _pick(
         remote.get("waterDangerThreshold"), local["waterDangerThreshold"]
     )
-    # rainfallDangerThreshold belum ada di thresholds.json -- kalau backend juga
-    # belum mengirim, hasilnya None dan _evaluate tidak memicu alarm hujan.
+    # rainfallDangerThreshold is not in thresholds.json yet -- if the backend also
+    # has not sent it, the result is None and _evaluate does not trigger a rain alarm.
     resolved["rainfallDangerThreshold"] = _pick(
         remote.get("rainfallDangerThreshold"), local.get("rainfallDangerThreshold")
     )
