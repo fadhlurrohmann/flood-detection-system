@@ -9,7 +9,7 @@ from config import settings
 
 try:
     import smbus2
-    import bme280 as _bme280_lib
+    import sensors.bme280_sensor as _bme280_lib
 except ImportError:
     smbus2 = None
     _bme280_lib = None

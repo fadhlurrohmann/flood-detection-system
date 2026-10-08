@@ -10,7 +10,7 @@ Usage: python3 tests/test_bme280.py
 import sys, os, time
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from sensors.bme280 import BME280Sensor
+from sensors.bme280_sensor import BME280Sensor
 
 print("=" * 60)
 print("  TEST — BME280 (I2C)")
