@@ -78,17 +78,18 @@ BME280_ADDRESS = int(_opt("EFWS_BME280_ADDR", "0x76"), 16)
 # only one is installed).
 #
 #   MCP3008 channel map:
-#     CH2 : Pressure sensor via R_BURDEN — direct, WITHOUT an LLC (max ~2V)
+#     CH0 : Pressure sensor via R_BURDEN — direct, WITHOUT an LLC (max ~2V)
 #     CH3 : Voltage Sensor Module S  — direct (max ~2.9V)
-#     CH0, CH1, CH4-CH7 : spare, not wired
+#     CH1, CH4-CH7 : spare, not wired
+#     CH2 : DAMAGED (reads ~2.92V even when grounded) — do not use
 SPI_BUS          = _int("EFWS_SPI_BUS", 0)
 SPI_DEVICE       = _int("EFWS_SPI_DEVICE", 0)
 SPI_MAX_SPEED_HZ = _int("EFWS_SPI_SPEED", 1350000)
 MCP3008_VREF     = _float("EFWS_MCP3008_VREF", 3.3)
 
-ADC_CHANNEL_PRESSURE        = _int("EFWS_ADC_PRESSURE",      2)   # via R_BURDEN, no LLC
+ADC_CHANNEL_PRESSURE        = _int("EFWS_ADC_PRESSURE",      0)   # via R_BURDEN, no LLC
 ADC_CHANNEL_BATTERY         = _int("EFWS_ADC_BATTERY",       3)   # voltage sensor module S, direct
-# CH0, CH1, CH4-CH7 are not wired — physical spares on the MCP3008
+# CH1, CH4-CH7 are not wired — physical spares on the MCP3008; CH2 is damaged
 
 # ─── Gravity Rainfall Sensor (DFRobot SEN0575) ─────────────────────────────
 I2C_BUS = 1

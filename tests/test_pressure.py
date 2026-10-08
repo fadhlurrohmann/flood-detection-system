@@ -3,7 +3,8 @@ TEST — Submersible Pressure Sensor (water level, 4-20mA loop via burden resist
 
 Check before running:
   ls /dev/spidev*  → /dev/spidev0.0 must exist
-  R_BURDEN 250Ω installed in the loop, its tap going to LLC HV-5 → LV-5 → MCP3008 CH4
+  R_BURDEN 100Ω installed in the loop, its tap going directly to MCP3008 CH0 (pin 1), NO LLC
+  Bottom of R_BURDEN and the loop PSU (−) MUST share ground with the Pi/MCP3008
   The 12-24V loop PSU is on (this sensor is loop-powered, NOT from the Pi/5V buck)
 
 What is checked:
@@ -21,7 +22,7 @@ from config import settings
 from sensors.pressure import PressureWaterSensor
 
 print("=" * 60)
-print("  TEST — Submersible Pressure Sensor (MCP3008 CH4)")
+print(f"  TEST — Submersible Pressure Sensor (MCP3008 CH{settings.ADC_CHANNEL_PRESSURE})")
 print("=" * 60)
 print(f"R_BURDEN    : {settings.PRESSURE_BURDEN_OHM}Ω")
 print(f"mA range    : {settings.PRESSURE_MIN_MA}-{settings.PRESSURE_MAX_MA}mA")

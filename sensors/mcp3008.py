@@ -14,9 +14,10 @@ IMPORTANT about voltage:
     side is pulled to 5V, the LV side stalls at 3.3V) → wrong readings.
 
 Default channel mapping (see docs/Pinout.md for wiring details):
-  CH2 → Submersible pressure sensor, via burden resistor (direct, WITHOUT an LLC)
+  CH0 → Submersible pressure sensor, via burden resistor (direct, WITHOUT an LLC)
   CH3 → Battery voltage sensor module (direct, max ~2.9V)
-  CH0, CH1, CH4-CH7 → spare/expansion
+  CH1, CH4-CH7 → spare/expansion
+  CH2 → DAMAGED (reads ~2.92V even when grounded) — do not use
 
 Requires: pip install spidev
 """

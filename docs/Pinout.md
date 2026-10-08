@@ -83,8 +83,9 @@ python3 tests/test_bme280.py
 | DIN (pin 11)  | GPIO10 (MOSI) | |
 | CS/SHDN (pin 10) | GPIO8 (CE0) | |
 | DGND (pin 9)  | Common GND | |
-| CH2-CH3 | See channel table below | Wired directly — **no LLC** |
-| CH0, CH1, CH4-CH7 | Spare, not wired | |
+| CH0, CH3 | See channel table below | Wired directly — **no LLC** |
+| CH1, CH4-CH7 | Spare, not wired | |
+| CH2 | **Damaged — do not use** | |
 
 Verification: `ls /dev/spidev*` → should show `/dev/spidev0.0`
 
@@ -98,9 +99,10 @@ through the LLC** (see "Why analog must not go through the LLC" below).
 
 | Channel | Signal | Voltage at pin | Notes |
 |---------|--------|----------------|-------|
-| **CH2** | Pressure sensor (via **R_BURDEN** 100Ω) | 0.4-2.0V | Water level (4-20mA loop) |
+| **CH0** | Pressure sensor (via **R_BURDEN** 100Ω) | 0.4-2.0V | Water level (4-20mA loop) |
 | **CH3** | Voltage Sensor Module **S** | battery ÷ 5 (~2.6V, max ~2.9V) | Battery voltage |
-| CH0, CH1, CH4-CH7 | *(spare / expansion)* | — | — |
+| CH1, CH4-CH7 | *(spare / expansion)* | — | — |
+| CH2 | **damaged** — reads ~2.92V even when grounded | — | do not use |
 
 ### Logic Level Converter — 5V DIGITAL signals into Pi GPIO only
 
@@ -158,7 +160,7 @@ PSU 12-24V (+) ──────────► Sensor Loop V+
                     └────────────┬────────────┘
                                  │ tap here →  0.4-2.0V
                                  ▼
-                       MCP3008 CH2  (direct, NO LLC)
+                       MCP3008 CH0  (direct, NO LLC)
                                  │
 PSU 12-24V (−) ──────────► common ground (after R_BURDEN)
 ```
@@ -168,12 +170,12 @@ PSU 12-24V (−) ──────────► common ground (after R_BURDEN
 | Loop V+ | PSU 12-24V (+) — **not** from Pi/buck converter 5V |
 | Loop output (after sensor) | Top of R_BURDEN (100Ω, 0.1%) |
 | Bottom of R_BURDEN | Common ground & PSU (−) |
-| Sensor/R_BURDEN connection point | MCP3008 **CH2** directly (no LLC) |
+| Sensor/R_BURDEN connection point | MCP3008 **CH0** (pin 1) directly (no LLC) |
 
 **Why 100Ω?**
 - 4mA × 100Ω = **0.4V** → "empty" level (0m)
 - 20mA × 100Ω = **2.0V** → "full" level (`PRESSURE_RANGE_M` — adjust to your sensor datasheet)
-- 2.0V max stays below the MCP3008 VREF (3.3V), so the signal goes straight to CH2 without the LLC.
+- 2.0V max stays below the MCP3008 VREF (3.3V), so the signal goes straight to CH0 without the LLC.
   `EFWS_PRESSURE_BURDEN_OHM` in `.env` must match the installed resistor (default 100).
 
 The conversion formula is in `sensors/pressure.py`. **Adjust** `EFWS_PRESSURE_RANGE_M`
@@ -250,7 +252,7 @@ Control side (Pi 3.3V GPIO):          High-power side (12V):
 Battery Sensor S (÷5, max ~2.9V, direct) ─────────────┐
 Pressure via R_BURDEN (0.4-2.0V, direct) ─────────────┤
                                 ▼
-                     MCP3008 CH2-CH3  (SPI0)
+                     MCP3008 CH0, CH3  (SPI0)
                                 │
 BME280 (I2C direct) ─────────────┤
 RS485 Anemometer (USB) ──────────┤
@@ -297,7 +299,7 @@ A7670E / SIM7600 (USB) ──────────┤
 [ ] Battery sensor S connected directly to MCP3008 CH3
 [ ] No wire from any LLC LV pin to the MCP3008 (idle LV pins sit at 3.3V)
 [ ] MCP3008 VDD & VREF to 3.3V (not 5V)
-[ ] R_BURDEN 100Ω installed correctly in the pressure sensor loop, tapped directly to MCP3008 CH2
+[ ] R_BURDEN 100Ω installed correctly in the pressure sensor loop, tapped directly to MCP3008 CH0
 [ ] Pressure sensor PSU isolated from Pi/buck converter 5V
 [ ] Voltage sensor module taps directly to Battery+/− (not through relay)
 [ ] 12V siren path only through relay COM/NO, never touching Pi pins
