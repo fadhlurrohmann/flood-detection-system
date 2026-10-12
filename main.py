@@ -63,12 +63,13 @@ def _load_sensors_and_alarm():
     if settings.RUN_MODE == "mock":
         logger.info("Mode: MOCK — sensors are simulated, no GPIO/I2C access")
         from sensors.mock_sensors import (
-            MockPressureWater, MockRainfall,
+            MockPressureWater, MockRainfall, MockWaterflow,
             MockAlarmController,
         )
         return {
             "pressure": MockPressureWater(),
             "rain":     MockRainfall(),
+            "flow":     MockWaterflow(),
         }, MockAlarmController()
     else:
         logger.info("Mode: HARDWARE — accessing real GPIO/SPI/I2C")
@@ -77,11 +78,13 @@ def _load_sensors_and_alarm():
         from sensors.null_sensor import NullSensor, NullAlarmController
         from alarm.siren         import AlarmController
         from sensors.JSN_SR04T   import JSN_SR04T
+        from sensors.YF_S201     import YFS201
 
         factories = {
             "pressure": PressureWaterSensor,
             "rain":     RainfallSensor,
             "distance": JSN_SR04T,
+            "flow":     YFS201,
         }
         sensors = {}
         for name, factory in factories.items():
@@ -293,6 +296,8 @@ class EFWS:
                     "timestamp": timestamp,
                     "waterLevel": pressure.get("depth_m"),
                     "distanceM": distance_m,
+                    "flowRateLpm": data.get("flow", {}).get("flow_lpm"),
+                    "flowTotalLiters": data.get("flow", {}).get("total_liters"),
                     "rainfallMm": rain.get("rainfall_mm"),
                 }
             ],
