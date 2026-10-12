@@ -94,3 +94,18 @@ class MockAlarmController:
     def silence(self):
         self.set_level("none")
 
+
+
+class MockWaterflow:
+    def __init__(self):
+        self._last_read = time.monotonic()
+        self._total_liters = 0.0
+
+    def read(self):
+        now = time.monotonic()
+        elapsed = now - self._last_read
+        self._last_read = now
+        flow = _jitter(5.0)
+        self._total_liters += flow * elapsed / 60
+        return {"flow_lpm": flow, "total_liters": round(self._total_liters, 4),
+                "sample_duration_sec": elapsed, "_mock": True}
