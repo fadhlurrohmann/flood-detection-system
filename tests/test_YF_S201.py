@@ -6,7 +6,7 @@ import os
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-module_path = os.path.join(os.path.dirname(__file__), "..", "sensors", "YF-S201.py")
+module_path = os.path.join(os.path.dirname(__file__), "..", "sensors", "YF_S201.py")
 module_spec = importlib.util.spec_from_file_location("yf_s201", module_path)
 module = importlib.util.module_from_spec(module_spec)
 module_spec.loader.exec_module(module)
