@@ -1,4 +1,4 @@
- """YF-S201: continuous pulse counting; totals reset when the process restarts.
+"""YF-S201: continuous pulse counting; totals reset when the process restarts.
 
 Default calibration: 450 pulses/litre. Calibrate against a measured volume.
 Use a LLC between the 5V signal and Raspberry Pi GPIO.
