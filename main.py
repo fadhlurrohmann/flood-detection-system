@@ -299,7 +299,7 @@ class EFWS:
                     "flowRateLpm": data.get("flow", {}).get("flow_lpm"),
                     "flowTotalLiters": data.get("flow", {}).get("total_liters"),
                     "rainfallTotalMm": rain.get("rainfall_total_mm"),
-                    "rainfallLastHour": rain.get("rainfall_last_hour")
+                    "rainfallLastHour": rain.get("rainfall_last_hour_mm")
                 }
             ],
         }
