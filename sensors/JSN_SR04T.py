@@ -24,7 +24,7 @@ class JSN_SR04T:
             sensor_options["pin_factory"] = LGPIOFactory()
         self.sensor = DistanceSensor(**sensor_options)
 
-    def read(self, timeout: float = 2.0) -> Optional[float]:
+    def read(self, timeout: float = 2.0) -> dict:
         """Read distance in metres, or return None when no echo is received."""
         previous_handler = signal.getsignal(signal.SIGALRM)
         signal.signal(signal.SIGALRM, self._handle_timeout)
@@ -36,7 +36,9 @@ class JSN_SR04T:
             )
             distance_m = self.sensor.distance
             print(f"Sensor data received: {distance_m:.3f} m", flush=True)
-            return distance_m
+            return {
+                "distance_m": distance_m
+            }
 
         except TimeoutError:
             print(
@@ -44,7 +46,9 @@ class JSN_SR04T:
                 f"(TRIG={self.trig}, ECHO={self.echo})",
                 flush=True,
             )
-            return None
+            return {
+                "distance_m": None
+            }
         finally:
             signal.setitimer(signal.ITIMER_REAL, 0)
             signal.signal(signal.SIGALRM, previous_handler)
