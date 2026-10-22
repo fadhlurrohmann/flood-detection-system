@@ -1,244 +1,75 @@
-# EFWS — Complete Guide: Wiring → Testing → API Prototyping → Background Operation
+# Run the current flood system on a Raspberry Pi
 
-This guide from NOL until EFWS running stabil in background, using
-real hardware: Raspberry Pi 4, MCP3008 (ADC SPI), Logic Level Converter,
-BME280, Submersible pressure sensor
-(4-20mA), Module sensor voltage DC 0-25V (battery), RS485 Anemometer,
-A7670E/SIM7600 (4G+GNSS, one only), Relay 5V + Siren 12V 120dB.
+The current runtime uses pressure, rainfall, ultrasonic distance, water flow, and voltage. BME280 is planned for later; soil and wind are not required. Commands below run on the Pi, from this repository root. Adjust the directory if your checkout is elsewhere.
 
-Structure project this **flat** — `main.py` exists directly in root project
-(not in subfolder). `venv/`, `.env`, `scripts/`, `logs/`, `database/`
-all sejajar with `main.py`.
-
----
-
-## STAGE 0 — Wiring physical
-
-**REQUIRED read first**: `docs/Pinout.md` — contains tabel wiring complete per
-components, including note safety logic level converter (5V DIGITAL signals must go
-through the level converter before entering GPIO; ANALOG signals to the MCP3008
-must stay below 3.3V and connect directly, never through the LLC) and
-note safety route 12V siren.
-
-After all cable installed, **DO NOT directly Run code** — continue
-first to preparation OS & check device first in Stage 2.
-
----
-
-## STAGE 1 — Move project to Raspberry Pi
+## Prepare interfaces and Python
 
 ```bash
-scp -r efws pi@<ip-raspberry-pi>:/home/pi/efws
-ssh pi@<ip-raspberry-pi>
-cd /home/pi/efws
-```
-
----
-
-## STAGE 2 — Preparation OS (sekali only)
-
-```bash
-sudo apt update && sudo apt install -y python3-venv python3-pip \
-    i2c-tools usb-modeswitch modemmanager network-manager git
-
+cd ~/Documents/flood-detection-system
+sudo apt update
+sudo apt install -y python3-venv python3-dev i2c-tools swig liblgpio-dev
 sudo raspi-config
-# Interface Options -> I2C  -> Yes   (for BME280)
-# Interface Options -> SPI  -> Yes   (for MCP3008)
-# Interface Options -> Serial Port -> "login shell over serial" = No,
-#                                     "serial port hardware" = Yes
-#                                     (ONLY if A7670E disambung via UART,
-#                                      If via USB step this can exceeded)
-sudo reboot
+# Interface Options -> SPI -> Enable
+# Interface Options -> I2C -> Enable
+sudo usermod -aG gpio,spi,i2c,dialout "$USER"
+# Reboot or log in again to apply interface/group changes.
 ```
 
-After reboot, check device-device physical already detected before continue:
-```bash
-ls /dev/spidev*     # must appear /dev/spidev0.0 (MCP3008)
-i2cdetect -y 1       # must appear 0x76 (BME280)
-ls /dev/ttyUSB*      # must appear several ttyUSBx (A7670E + anemometer)
-```
-If one above NOT appear, stop first and check wiring/
-`raspi-config` before continue — do not force continue to instalasi Python.
-
-Add user `pi` to group that needed so that NOT need `sudo`
-every access hardware:
-```bash
-sudo usermod -aG gpio,spi,i2c,dialout pi
-sudo reboot
-```
-
----
-
-## STAGE 3 — Setup Python environment
+After logging back in:
 
 ```bash
-cd /home/pi/efws
+cd ~/Documents/flood-detection-system
+ls /dev/spidev0.0
+i2cdetect -y 1
+# Expected rain address: 1d; a BME280 address is not required.
 python3 -m venv venv
 source venv/bin/activate
-pip install -r requirements.txt
-deactivate
-```
-
-
-Install dependencies required for LGPIO python library installation in the event that a wheel error occurs
-```bash
-sudo apt update
-sudo apt install swig python3-dev
-sudo apt install liblgpio-dev
-```
-
----
-
-## STAGE 4 — Setup `.env` (mode mock first, then webhook.site)
-
-```bash
-cp .env.example .env
+python3 -m pip install -r requirements.txt
+# Only if .env does not already exist:
+test -f .env || cp .env.example .env
 nano .env
 ```
 
-for **prototyping fast to API**, open https://webhook.site in browser,
-copy "Your unique URL", then content:
-```this
-EFWS_RUN_MODE=mock
-EFWS_API_URL=https://webhook.site/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
-EFWS_API_KEY=
-```
-Leave `EFWS_RUN_MODE=mock` first in stage this — we test connection API
-without hardware first, new testing per-sensor one by one, new
-move to `hardware` in STAGE 7.
+Set the device ID/token, real API base URL, fallback latitude/longitude, and `EFWS_RUN_MODE=hardware`. Exported environment variables and systemd settings override `.env`; `.env` fills values that are not already set. The local `.env` is not modified by the branch changes.
 
----
+Check [Pinout.md](Pinout.md), pressure range/burden/ADC reference, voltage divider ratio and battery endpoints, and flow pulses/litre. Battery percentage is only a linear voltage estimate. Configure the optional ultrasonic mounting height to use distance as a depth alarm/fallback. Without that measurement it reports distance only.
 
-## STAGE 5 — Test connection API (webhook.site) duluan
+Edit `config/thresholds.json` for site-appropriate **high-water** and last-hour rainfall limits. The example values 0.5 m and 30 mm/hour are not validated deployment limits. With 180-second sampling and three consecutive danger readings, a new event can take roughly nine minutes to activate the siren; choose the sampling interval and streak deliberately. Remote numeric thresholds can override each local field after the server responds.
+
+## Validate and run
 
 ```bash
-source venv/bin/activate
-python3 tests/test_webhook_api.py
-```
-Open page webhook.site You — one request POST JSON telemetry must
-appear there live. If this succeeds, the Pi-to-internet-to-API route is
-terbukti bekerja, new continue to testing sensor one by one.
-
-> not yet a connection internet/4G in Pi? Use `tools/mock_api_server.py`
-> first (Run in laptop that one network with Pi, then set
-> `EFWS_API_URL=http://<ip-laptop>:5000/api/v1/efws` in `.env`) so that can
-> see JSON that sent in a directly without need internet at all.
-
----
-
-## STAGE 6 — Test every sensor one by one (ORDER THIS IMPORTANT)
-
-Run **sequential** — If one failed, resolve it first before continue
-to the next test (all analog sensors depend on the MCP3008, so
-If test #1 failed, all sensor analog afterward also will failed).
-
-```bash
-# 1. MCP3008 first - foundation for all analog sensors
-python3 tests/test_mcp3008.py
-
-# 2. BME280 (I2C, independent from MCP3008)
-python3 tests/test_bme280.py
-
-# 3. Submersible pressure sensor (analog via burden resistor, through MCP3008)
-python3 tests/test_pressure.py
-
-# 4. Battery voltage sensor (analog, through MCP3008)
-python3 tests/test_battery.py
-
-# 5. RS485 Anemometer
-python3 tests/test_anemometer.py
-
-# 6. A7670E/SIM7600 - signal, SIM, GPS
-python3 tests/test_a7670e.py --gps-timeout 90
-
-# 7. Relay + Siren (⚠️ SUARA LOUD 120dB, read warning in the script)
-python3 tests/test_relay_siren.py
-
-# 8. All sensors together, one read cycle (final check before main.py)
+python3 -m unittest discover -s tests -p test_runtime.py -v
 python3 tests/test_all_sensors.py
-
-# 9. Offline queue integrity (simulate signal loss and verify data is unchanged)
-python3 tests/test_offline_queue_integrity.py
+EFWS_RUN_MODE=hardware python3 main.py
 ```
 
----
+The hardware check reads all five sensors. No soil/BME/wind is expected. Pressure open-loop faults or missing ultrasonic echoes fail that check. A zero flow rate when water is stationary is valid; verify flow calibration with water moving. A disconnected analog input can float, so compare pressure and voltage readings against independent measurements.
 
-## STAGE 7 — Run EFWS full in mode hardware (foreground first)
+In runtime a missing sensor is reported as null and an error; the remaining sensors keep running. Check the logs for errors rather than assuming a running process proves healthy hardware. Sensors that fail startup initialization remain unavailable until restart after repair. Stop with Ctrl+C; the siren is silenced and hardware resources are released.
 
-```bash
-nano .env
-# Change: EFWS_RUN_MODE=hardware
-
-python3 main.py
-```
-Amati several cycle read (default every 5 seconds) — make sure all value
-sensor produces sensible values, then check webhook.site to confirm that the data
-sent. Press `Ctrl+C` for stop After sure all running either.
-
----
-
-## STAGE 8 — Run in background (without mengganggu terminal)
-
-Two methods — select one according to needs:
-
-### Methods A: `scripts/efws_ctl.sh` (fast, for still sering edit code)
+For a local HTTP check, run `python3 tools/mock_api_server.py` in another terminal, then:
 
 ```bash
-chmod +x scripts/efws_ctl.sh
-./scripts/efws_ctl.sh start      # Run
-./scripts/efws_ctl.sh status     # check running/NOT + CPU/RAM
-./scripts/efws_ctl.sh logs       # tail log real-time (Ctrl+C only stop monitoring, process still running)
-./scripts/efws_ctl.sh restart    # REQUIRED Run this every time update code
-./scripts/efws_ctl.sh stop       # stop
+EFWS_RUN_MODE=mock EFWS_API_URL=http://127.0.0.1:5000/api/v1/efws python3 main.py
 ```
 
-### Methods B: systemd (recommended for production — auto-start when boot, auto-restart when crash)
+This uses simulated sensors. Confirm the actual backend accepts the fields and nulls described in [Architecture.md](Architecture.md). No production backend/schema is included in this repository.
+
+## Optional systemd service
+
+The service template is `efws.service`. Render its paths and user for the actual checkout before installing:
 
 ```bash
-sudo cp efws.service /etc/systemd/system/efws.service
+sed -e "s|/home/uwfadmin/ews|$PWD|g" \
+    -e "s|User=uwfadmin|User=$USER|" \
+    -e "s|Group=uwfadmin|Group=$(id -gn)|" \
+    efws.service | sudo tee /etc/systemd/system/efws.service >/dev/null
 sudo systemctl daemon-reload
-sudo systemctl enable efws      # auto-start when boot
-sudo systemctl start efws       # Run now
-
-sudo systemctl status efws          # check running/NOT
-sudo systemctl restart efws         # REQUIRED Run this every time update code
-sudo systemctl stop efws            # stop
-sudo journalctl -u efws -f          # log system real-time
-tail -f logs/efws.log               # log aplikasi (more details)
+sudo systemctl enable --now efws.service
+journalctl -u efws.service -f
 ```
 
-`.env` read automatically through `EnvironmentFile=` in `efws.service` — therefore
-edit `.env` then `systemctl restart efws` enough, NOT need sentuh file
-service again unless you replace the path or user.
+Verify the rendered `WorkingDirectory`, `ExecStart`, `EnvironmentFile`, `User`, and `Group` before starting. Stop an existing manual instance first to avoid GPIO contention. Wi-Fi/Ethernet operation does not require `gsm-connect.service`; configure cellular connectivity separately if using it. The service needs hardware mode in its environment file.
 
----
-
-## STAGE 9 — Move from webhook.site to API production
-
-After prototyping finished and backend original already ready:
-```bash
-nano .env
-# EFWS_API_URL=https://api-you.com/api/v1/efws
-# EFWS_API_KEY=token_rahasia_anda   (if backend use auth Bearer token)
-
-./scripts/efws_ctl.sh restart    # or: sudo systemctl restart efws
-```
-
----
-
-## Troubleshooting per components
-
-| Components | Symptom | Possible cause |
-|----------|--------|------------------------|
-| MCP3008 | `test_mcp3008.py` failed open SPI | SPI not active yet in raspi-config; `spidev` not yet terinstall; wiring CLK/DOUT/DIN/CS wrong |
-| BME280 | `i2cdetect -y 1` NOT appear 0x76 | I2C not active yet; wiring SDA/SCL reversed; address actually 0x77 (set `EFWS_BME280_ADDR=0x77`) |
-| Pressure sensor | `current_ma` always ~0, `fault_open_loop=True` | Loop disconnected/not yet connected, or PSU 12-24V loop not yet on — Run `python3 tests/test_pressure.py` for diagnosis |
-| Pressure sensor | `depth_m` NOT enter sense | `EFWS_PRESSURE_RANGE_M` not yet adapted datasheet sensor You |
-| Battery sensor | `voltage`/`percent` NOT enter sense | `BATTERY_DIVIDER_RATIO`/`BATTERY_MAX_V`/`BATTERY_MIN_V` not yet adapted to your module and battery |
-| Anemometer | Exception when read | Slave ID/register Modbus wrong (check datasheet unit You); wiring A/B reversed |
-| A7670E | `AT` NOT responds | Port wrong (`ls /dev/ttyUSB*`), module not yet power-on, baudrate wrong |
-| A7670E | GPS timeout continuously | Antenna GNSS not yet installed/There is no sky open; make sure use `AT+CGNSSPWR` not `AT+CGPS` (already correct in code this) |
-| Relay/Siren | Relay "click" but siren NOT sound | source 12V not yet connected; wiring COM/NO wrong |
-| Relay/Siren | Relay NOT "click" at all | `active_low` wrong; GPIO pin in `.env` NOT according to wiring physical |
-| API | `test_webhook_api.py` failed send | check `ping 8.8.8.8` (internet running?); `EFWS_API_URL` still placeholder |
-| systemd | `status` → `failed` | `journalctl -u efws -n 50 --no-pager` for details; usually module Python not yet terinstall in venv, or `.env` NOT found |
+The optional backend `Reboot` command restarts this service after a delay, using `sudo -n systemctl restart efws.service`. Configure that exact sudo permission for the service user if the command is required. SUCCESS acknowledges scheduling only. Mock mode never restarts the service.

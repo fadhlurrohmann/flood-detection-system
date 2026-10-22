@@ -3,14 +3,16 @@
   "deviceToken": "test",
   "telemetry": [
     {
-      "timestamp": "2025-06-30T07:00:00.000Z",
-      "waterLevel": 1.236,
-      "waterLevelCurrentMa": 7.955,
-      "temp": 47.0,
-      "humidity": 28.0,
-      "batteryLevel": 85.0,
-      "flameDetected": false,
-      "windSpeed": 9.0
+      "timestamp": "2026-10-21T00:00:00.000Z",
+      "waterLevel": 0.45,
+      "waterLevelCurrentMa": 6.4,
+      "distanceM": 2.55,
+      "flowRateLpm": 5.0,
+      "flowTotalLiters": 0.0,
+      "rainfallTotalMm": 80.0,
+      "rainfallLastHour": 20.0,
+      "batteryVoltage": 12.06,
+      "batteryLevel": 85.0
     }
   ]
 }

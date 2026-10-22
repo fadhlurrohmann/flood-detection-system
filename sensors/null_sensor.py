@@ -20,9 +20,13 @@ with all the keys, just with null contents -- whether accessed through
 """
 
 SENSOR_SCHEMAS = {
-    "bme280":   {"temperature_c": None, "humidity_percent": None, "pressure_hpa": None},
-    "pressure": {"current_ma": None, "depth_m": None, "pressure_bar": None, "fault_open_loop": None},
-    "wind":    {"speed_ms": None},
+    "pressure": {"adc_raw": None, "voltage": None, "current_ma": None, "depth_m": None,
+                 "pressure_bar": None, "fault_open_loop": None, "fault_out_of_range": None},
+    "rain": {"rainfall_total_mm": None, "rainfall_last_hour_mm": None,
+             "tip_counter": None, "working_time_hours": None},
+    "distance": {"distance_m": None},
+    "flow": {"flow_lpm": None, "total_liters": None, "pulse_count": None,
+             "sample_duration_sec": None},
     "battery": {"voltage": None, "percent": None},
 }
 

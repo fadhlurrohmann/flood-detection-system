@@ -20,6 +20,8 @@ Voltage produced:
 Safe for MCP3008.
 """
 
+import math
+
 from config import settings
 from sensors.mcp3008 import get_mcp3008
 
@@ -72,6 +74,9 @@ class PressureWaterSensor:
             else settings.PRESSURE_RANGE_M
         )
 
+        values = (self.burden_ohm, self.adc_ref, self.min_ma, self.max_ma, self.range_m)
+        if not all(math.isfinite(v) and v > 0 for v in values) or self.max_ma <= self.min_ma:
+            raise ValueError("Invalid pressure calibration")
         self.adc = get_mcp3008()
 
     # ------------------------------------------------------
@@ -141,15 +146,14 @@ class PressureWaterSensor:
 
         raw = self.read_raw()
 
-        voltage = self.read_voltage()
-
-        current = self.read_current_ma()
-
-        depth = self.read_depth_m()
-
-        pressure = self.read_pressure_bar()
-
-        fault = current < 3.8
+        # Derive all fields from one ADC sample so faults and depth agree.
+        voltage = round(raw / 1023.0 * self.adc_ref, 4)
+        current = round(voltage / self.burden_ohm * 1000.0, 3)
+        fault = current < self.min_ma - 0.2
+        out_of_range = fault or current > self.max_ma + 0.5 or raw >= 1023
+        fraction = max(0.0, min(1.0, (current - self.min_ma) / (self.max_ma - self.min_ma)))
+        depth = None if out_of_range else round(fraction * self.range_m, 3)
+        pressure = None if depth is None else round(depth * 0.0980665, 4)
 
         return {
 
@@ -163,7 +167,8 @@ class PressureWaterSensor:
 
             "pressure_bar": pressure,
 
-            "fault_open_loop": fault
+            "fault_open_loop": fault,
+            "fault_out_of_range": out_of_range,
 
         }
 

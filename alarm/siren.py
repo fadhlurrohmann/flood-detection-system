@@ -15,6 +15,7 @@ sending data every few seconds while the WARNING alarm is active).
 """
 import threading
 import time
+
 from alarm.relay import Relay
 
 
@@ -52,6 +53,8 @@ class AlarmController:
         self._pulse_thread = None
 
     def set_level(self, level: str):
+        if level not in (self.LEVEL_NONE, self.LEVEL_WARNING, self.LEVEL_CRITICAL):
+            raise ValueError(f"Unknown alarm level: {level}")
         if level == self.current_level:
             return
         self.current_level = level
@@ -68,6 +71,10 @@ class AlarmController:
 
     def silence(self):
         self.set_level(self.LEVEL_NONE)
+
+    def close(self):
+        self.silence()
+        self.relay.close()
 
 
 if __name__ == "__main__":

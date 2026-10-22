@@ -1,471 +1,359 @@
-"""
-Early Fire Warning System (EFWS) - Main Orchestrator
-
-NEW ARCHITECTURE:
-  - The sensor read cycle (default 3 minutes) ONLY evaluates thresholds.
-    Nothing is saved to SQLite and nothing is sent if every value is
-    below its threshold ("nothing happens").
-  - If ANY value crosses a threshold -> "emergency upload": send
-    Location + Telemetry + Heartbeat together (endpoints 1, 2, 3).
-  - Endpoint 4 (/sensors/commands/ack) ONLY runs when the Heartbeat
-    response carries 'commands' -- event-driven, outside the scheduler.
-  - Active threshold = remote config (from the Telemetry response) merged
-    per-field with the local hardcoded values (config/threshold_resolver.py).
-  - The offline queue retry (every 2 minutes) runs in a separate thread,
-    independent of the sensor read cycle (3 minutes).
-"""
+"""Flood warning runtime: local sensing/alarm, durable uploads, background GPS."""
 import json
-import time
 import logging
-import threading
+import math
+import signal
 import subprocess
-import traceback
-from pathlib import Path
+import threading
+import time
 from datetime import datetime, timezone
-from zoneinfo import ZoneInfo
+from pathlib import Path
 
+from communication.api_publisher import APIPublisher
 from config import settings
 from config.threshold_resolver import resolve_active_thresholds
 from database.db_manager import DBManager
-from communication.api_publisher import APIPublisher
+from sensors.null_sensor import NullAlarmController, NullSensor
 
-# ─── Create the required folders before the logger ───────────────
-Path(settings.LOG_PATH).parent.mkdir(parents=True, exist_ok=True)
-Path(settings.DB_PATH).parent.mkdir(parents=True, exist_ok=True)
-
-# ─── Logger setup ────────────────────────────────────────────────
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-    datefmt="%Y-%m-%dT%H:%M:%S",
-    handlers=[
-        logging.StreamHandler(),
-        logging.FileHandler(settings.LOG_PATH, mode="a"),
-    ],
-)
 logger = logging.getLogger("efws.main")
 
 
-# ─── SIM factory (auto-detect A7670E or SIM7600) ─────────────────
 def _load_sim():
-    from communication.sim_detector import detect_sim
     try:
-        sim = detect_sim()
-        logger.info("SIM module: %s @ %s", sim.module.upper(), sim.port)
-        return sim
-    except Exception as e:
-        logger.warning("SIM could not be initialised: %s — GPS disabled.", e)
+        from communication.sim_detector import detect_sim
+        return detect_sim()
+    except Exception:
+        logger.exception("SIM unavailable; using configured location")
         return None
 
 
-# ─── Sensor + alarm factory ──────────────────────────────────────
 def _load_sensors_and_alarm():
     if settings.RUN_MODE == "mock":
-        logger.info("Mode: MOCK — sensors are simulated, no GPIO/I2C access")
         from sensors.mock_sensors import (
-            MockPressureWater, MockRainfall, MockWaterflow,
             MockAlarmController,
+            MockBattery,
+            MockDistance,
+            MockPressureWater,
+            MockRainfall,
+            MockWaterflow,
         )
         return {
-            "pressure": MockPressureWater(),
-            "rain":     MockRainfall(),
-            "flow":     MockWaterflow(),
+            "pressure": MockPressureWater(), "rain": MockRainfall(),
+            "distance": MockDistance(), "flow": MockWaterflow(),
+            "battery": MockBattery(),
         }, MockAlarmController()
-    else:
-        logger.info("Mode: HARDWARE — accessing real GPIO/SPI/I2C")
-        from sensors.pressure    import PressureWaterSensor
-        from sensors.rainfall    import RainfallSensor
-        from sensors.null_sensor import NullSensor, NullAlarmController
-        from alarm.siren         import AlarmController
-        from sensors.JSN_SR04T   import JSN_SR04T
-        from sensors.YF_S201     import YFS201
 
-        factories = {
-            "pressure": PressureWaterSensor,
-            "rain":     RainfallSensor,
-            "distance": JSN_SR04T,
-            "flow":     YFS201,
-        }
-        sensors = {}
-        for name, factory in factories.items():
-            try:
-                sensors[name] = factory()
-            except Exception as e:
-                logger.error(
-                    "Sensor '%s' FAILED to initialise (treated as NOT INSTALLED, "
-                    "its value will stay 0/null in the log & payload until fixed): %s",
-                    name, e,
-                )
-                sensors[name] = NullSensor(name, str(e))
-
+    # Import each driver independently: one missing library must not disable
+    # the other sensors or prevent local alarms from starting.
+    from importlib import import_module
+    factories = {
+        "pressure": ("sensors.pressure", "PressureWaterSensor"),
+        "rain": ("sensors.rainfall", "RainfallSensor"),
+        "distance": ("sensors.JSN_SR04T", "JSN_SR04T"),
+        "flow": ("sensors.YF_S201", "YFS201"),
+        "battery": ("sensors.battery", "BatterySensor"),
+    }
+    sensors = {}
+    for name, (module, class_name) in factories.items():
+        sensor = None
         try:
-            alarm = AlarmController()
-        except Exception as e:
-            logger.error(
-                "Alarm controller (relay/siren) FAILED to initialise — local alarm "
-                "disabled (the system keeps running, only the siren will not sound): %s", e,
-            )
-            alarm = NullAlarmController(str(e))
+            sensor = getattr(import_module(module), class_name)()
+            if name == "rain":
+                sensor.initialize()
+            sensors[name] = sensor
+        except Exception as error:
+            if sensor is not None and hasattr(sensor, "close"):
+                try:
+                    sensor.close()
+                except Exception:
+                    logger.exception("Failed to close %s after initialization error", name)
+            logger.error("Sensor %s unavailable: %s", name, error)
+            sensors[name] = NullSensor(name, str(error))
+    try:
+        from alarm.siren import AlarmController
+        alarm = AlarmController()
+    except Exception as error:
+        logger.error("Local siren unavailable: %s", error)
+        alarm = NullAlarmController(str(error))
+    return sensors, alarm
 
-        return sensors, alarm
+
+def _number(value):
+    return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value)
 
 
-# ─── Threshold helpers ───────────────────────────────────────────
-def _load_hardcoded_thresholds() -> dict:
-    with open(settings.THRESHOLDS_PATH) as f:
-        return json.load(f)
+def _load_hardcoded_thresholds():
+    with open(settings.THRESHOLDS_PATH, encoding="utf-8") as file:
+        thresholds = json.load(file)
+    for key in ("waterDangerThreshold", "rainfallDangerThreshold"):
+        value = thresholds.get(key)
+        if not _number(value) or value < 0:
+            raise ValueError(f"{key} must be a finite, nonnegative number")
+    required = thresholds.get("alarm", {}).get("consecutive_readings_required", 3)
+    if isinstance(required, bool) or not isinstance(required, int) or required < 1:
+        raise ValueError("consecutive_readings_required must be a positive integer")
+    return thresholds
 
 
-def _exceeds(value, danger, lower_is_worse) -> bool:
-    """True if value crosses the danger threshold. A None value -> always False (unknown, not an alarm)."""
-    if value is None or danger is None:
+def _exceeds(value, danger, lower_is_worse=False):
+    if not _number(value) or not _number(danger):
         return False
-    return (value <= danger) if lower_is_worse else (value >= danger)
+    return value <= danger if lower_is_worse else value >= danger
 
 
-# ─── Main class ──────────────────────────────────────────────────
 class EFWS:
     def __init__(self):
         self.hardcoded_thresholds = _load_hardcoded_thresholds()
-        self.sensors, self.alarm  = _load_sensors_and_alarm()
-        self.api                  = APIPublisher()
-        self.db                   = DBManager()
-        self.sim                  = _load_sim()   # auto-detect A7670E or SIM7600
-
+        self.db = DBManager()
+        self.api = APIPublisher()
+        self.api.command_handler = self._process_commands
+        self.sensors, self.alarm = _load_sensors_and_alarm()
+        self.sim = None
         self._critical_streak = 0
         self._stop_flag = threading.Event()
-        self._last_routine_send = 0.0  # 0.0 -> the first routine send happens right away in the first cycle
-
+        self._upload_event = threading.Event()
+        self._last_routine_send = None
+        self._threads = []
+        self._closed = False
         self._location = {
-            "lat":    settings.DEVICE_LOCATION["lat"],
-            "lon":    settings.DEVICE_LOCATION["lon"],
-            "source": "config",
-            "fix":    False,
+            "lat": settings.DEVICE_LOCATION["lat"],
+            "lon": settings.DEVICE_LOCATION["lon"],
+            "source": "config", "fix": False,
         }
 
-        logger.info("EFWS initialised. Device: %s | Mode: %s | SIM: %s",
-                    settings.DEVICE_ID, settings.RUN_MODE,
-                    self.sim.module.upper() if self.sim else "none")
-
-        # Dedicated thread for the offline queue retry every
-        # EFWS_CONNECTIVITY_CHECK_SEC (2 minutes) -- DELIBERATELY independent
-        # of the sensor read cycle (3 minutes), so the "retry every
-        # 2 minutes" requirement is met exactly even if the read cycle is slower.
-        self._flush_thread = threading.Thread(target=self._flush_queue_loop, daemon=True)
-        self._flush_thread.start()
-
-        # Separate thread: auto-purge local data (SQLite) older than
-        # EFWS_DB_RETENTION_DAYS (default 3 days), checked every
-        # EFWS_DB_RETENTION_CHECK_SEC (default 6 hours) -- independent of the
-        # sensor read cycle and of the offline queue retry.
-        self._retention_thread = threading.Thread(target=self._retention_loop, daemon=True)
-        self._retention_thread.start()
-
-    # ─── Background: offline queue retry, independent of the read cycle ──
     def _flush_queue_loop(self):
-        interval = settings.EFWS_CONNECTIVITY_CHECK_SEC
-        while not self._stop_flag.is_set():
-            try:
-                self.api.flush_queue(self.db)
-            except Exception:
-                logger.error("Flush queue thread error:\n%s", traceback.format_exc())
-            self._stop_flag.wait(interval)
+        # Only this thread uses the HTTP session. Bundles are already in SQLite.
+        try:
+            while not self._stop_flag.is_set():
+                self._upload_event.clear()
+                try:
+                    while not self._stop_flag.is_set() and self.api.flush_queue(self.db):
+                        pass
+                except Exception:
+                    logger.exception("Upload worker failed; queued data retained")
+                self._upload_event.wait(settings.EFWS_CONNECTIVITY_CHECK_SEC)
+        finally:
+            self.api.close()
 
-    # ─── Background: auto-delete local data older than N days (default 3) ──
     def _retention_loop(self):
-        days = settings.DB_RETENTION_DAYS
-        interval = settings.DB_RETENTION_CHECK_SEC
         while not self._stop_flag.is_set():
             try:
-                result = self.db.purge_old_data(days=days)
-                if result["sensor_readings_deleted"] or result["api_queue_deleted"]:
-                    logger.info(
-                        "🧹 Retention: deleted %d sensor_readings rows, %d api_queue rows "
-                        "(older than %d days).",
-                        result["sensor_readings_deleted"],
-                        result["api_queue_deleted"],
-                        days,
-                    )
+                self.db.purge_old_data(settings.DB_RETENTION_DAYS)
             except Exception:
-                logger.error("Retention thread error:\n%s", traceback.format_exc())
-            self._stop_flag.wait(interval)
+                logger.exception("Database retention failed")
+            self._stop_flag.wait(settings.DB_RETENTION_CHECK_SEC)
 
-    # ─── GPS refresh ─────────────────────────────────────────────
+    def _gps_loop(self):
+        try:
+            while not self._stop_flag.is_set():
+                if self.sim is None:
+                    self.sim = _load_sim()
+                self._update_gps()
+                self._stop_flag.wait(settings.GPS_INTERVAL_SEC)
+        finally:
+            if self.sim is not None:
+                self.sim.close()
+
     def _update_gps(self):
         if self.sim is None:
-            logger.warning("📍 SIM/GPS unavailable -- using the fallback location from config (%s).",
-                           self._location)
             return
-
-        module_name = self.sim.module.upper() if hasattr(self.sim, "module") else "SIM"
-        logger.info("📡 Requesting GPS data from %s (port=%s)...",
-                    module_name, getattr(self.sim, "port", "?"))
         try:
-            result = self.sim.get_gps(timeout=settings._int("EFWS_GPS_TIMEOUT", 90))
-        except Exception as e:
-            logger.warning("📍 GPS error from %s: %s -- location KEEPS the previous/fallback value.",
-                           module_name, e)
-            return
+            result = self.sim.get_gps(timeout=settings.GPS_TIMEOUT)
+            lat, lon = result.get("lat"), result.get("lon")
+            if result.get("fix") and _number(lat) and _number(lon) and -90 <= lat <= 90 and -180 <= lon <= 180:
+                self._location = {"lat": lat, "lon": lon, "source": "gps", "fix": True}
+            else:
+                self._location = {**self._location, "fix": False, "source": "last-known/config"}
+        except Exception:
+            self._location = {**self._location, "fix": False, "source": "last-known/config"}
+            logger.exception("GPS failed; retaining last known/configured location")
 
-        if result.get("fix"):
-            self._location = {
-                "lat":        result["lat"],
-                "lon":        result["lon"],
-                "altitude_m": result.get("altitude_m"),
-                "source":     "gps",
-                "fix":        True,
-            }
-            logger.info(
-                "📍 REAL GPS FIX from %s: lat=%.6f, lon=%.6f, alt=%sm%s",
-                module_name, result["lat"], result["lon"],
-                result.get("altitude_m"),
-                f" | mock=True (not real hardware)" if result.get("_mock") else "",
-            )
-            if result.get("raw"):
-                logger.debug("📍 Raw +CGPSINFO from %s: %s", module_name, result["raw"])
-        else:
-            logger.warning("📍 GPS from %s has NO fix (%s) -- the location used/sent FALLS BACK to config.",
-                           module_name, result.get("reason"))
-            self._location["fix"]    = False
-            self._location["source"] = "fallback"
-
-    # ─── Sensor reads ────────────────────────────────────────────
-    def _read_all(self) -> dict:
+    def _read_all(self):
         data = {}
-        failed = []
         for key, sensor in self.sensors.items():
             try:
-                data[key] = sensor.read()
-            except Exception as e:
-                logger.error("Sensor '%s' read error: %s", key, e)
-                data[key] = {"error": str(e)}
-
-            if isinstance(data[key], dict) and data[key].get("error"):
-                failed.append(key)
-
-        if failed:
-            logger.warning(
-                "⚠️ Sensor UNREADABLE/EMPTY this cycle (value=0/null): %s",
-                ", ".join(failed),
-            )
-
+                reading = sensor.read()
+                if key == "distance" and not isinstance(reading, dict):
+                    reading = {"distance_m": reading}
+                if not isinstance(reading, dict):
+                    raise TypeError("Invalid sensor response")
+                if any(isinstance(v, float) and not math.isfinite(v) for v in reading.values()):
+                    raise ValueError("Sensor returned a nonfinite value")
+                if reading.get("fault_open_loop") or reading.get("fault_out_of_range"):
+                    reading = {**reading, "depth_m": None, "pressure_bar": None,
+                               "error": "Pressure current loop outside valid measurement range"}
+                if key == "distance" and reading.get("distance_m") is None and not reading.get("error"):
+                    raise ValueError("No ultrasonic echo")
+                data[key] = reading
+                if reading.get("error"):
+                    logger.warning("Sensor %s: %s", key, reading["error"])
+            except Exception as error:
+                logger.warning("Sensor %s read failed: %s", key, error)
+                data[key] = NullSensor(key, str(error)).read()
+        data["_timestamp"] = datetime.now(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z")
         return data
 
-    # ─── Evaluate (single-tier: exceeded / not, per the API contract) ──
-    def _evaluate(self, data: dict):
-        """
-        Active threshold = remote config (from the latest telemetry
-        response) merged with the local hardcoded values, per-field (see threshold_resolver).
-        Return: (any_triggered: bool, triggered: list[str])
-        """
-        t = resolve_active_thresholds(self.hardcoded_thresholds, self.api.remote_config)
+    def _ultrasonic_depth(self, data):
+        distance = data.get("distance", {}).get("distance_m")
+        height = settings.ULTRASONIC_MOUNT_HEIGHT_M
+        if _number(distance) and _number(height) and 0 <= distance <= height:
+            return round(height - distance, 3)
+        return None
 
-        checks = {
-            "water":        _exceeds(data["pressure"].get("depth_m"), t["waterDangerThreshold"], lower_is_worse=True),
-            "rainfall":     _exceeds(data["rain"].get("rainfall_mm"), t.get("rainfallDangerThreshold"), lower_is_worse=False),
-        }
-
-        triggered = [k for k, v in checks.items() if v]
-        return (len(triggered) > 0), triggered
-
-    # ─── Payload builders (backend contract, endpoints 1/2/3/4) ───
-    def _build_location_payload(self) -> dict:
-        return {
-            "deviceId":    settings.DEVICE_ID,
-            "deviceToken": settings.DEVICE_TOKEN,
-            "latitude":    self._location["lat"],
-            "longitude":   self._location["lon"],
-        }
-
-    def _build_telemetry_payload(self, data) -> dict:
+    def _evaluate(self, data):
+        thresholds = resolve_active_thresholds(self.hardcoded_thresholds, self.api.remote_config)
         pressure = data.get("pressure", {})
-        rain     = data.get("rain", {})
-        distance_m = data.get("distance")
-
-        timestamp = (
-            datetime.now(ZoneInfo("Asia/Jakarta"))
-            .strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3]
-            + "Z"
-        )
-
-        return {
-            "deviceId": settings.DEVICE_ID,
-            "deviceToken": settings.DEVICE_TOKEN,
-            "telemetry": [
-                {
-                    "timestamp": timestamp,
-                    "waterLevel": pressure.get("depth_m"),
-                    "distanceM": distance_m,
-                    "flowRateLpm": data.get("flow", {}).get("flow_lpm"),
-                    "flowTotalLiters": data.get("flow", {}).get("total_liters"),
-                    "rainfallTotalMm": rain.get("rainfall_total_mm"),
-                    "rainfallLastHour": rain.get("rainfall_last_hour")
-                }
-            ],
+        pressure_depth = pressure.get("depth_m") if not pressure.get("error") else None
+        checks = {
+            "water": _exceeds(pressure_depth, thresholds["waterDangerThreshold"]),
+            "ultrasonic_water": _exceeds(self._ultrasonic_depth(data), thresholds["waterDangerThreshold"]),
+            "rainfall": _exceeds(data.get("rain", {}).get("rainfall_last_hour_mm"),
+                                 thresholds["rainfallDangerThreshold"]),
         }
+        triggered = [name for name, active in checks.items() if active]
+        return bool(triggered), triggered
 
-    def _build_heartbeat_payload(self, data) -> dict:
-        # NOTE: batteryLevel used to come from the battery sensor, which has
-        # been removed (not one of the sensors: pressure/rain/distance). If the
-        # backend REQUIRES a numeric batteryLevel on every heartbeat, let us
-        # know -- we can add the battery sensor back just for this heartbeat.
-        return {
-            "deviceId":     settings.DEVICE_ID,
-            "deviceToken":  settings.DEVICE_TOKEN,
-            "batteryLevel": None,
-        }
+    def _identity(self):
+        return {"deviceId": settings.DEVICE_ID, "deviceToken": settings.DEVICE_TOKEN}
 
-    def _build_ack_payload(self, command_id: str, status: str, error: str = "") -> dict:
-        return {
-            "deviceId":    settings.DEVICE_ID,
-            "deviceToken": settings.DEVICE_TOKEN,
-            "commandId":   command_id,
-            "status":      status,
-            "error":       error,
-        }
+    def _build_location_payload(self):
+        location = self._location  # GPS replaces the whole snapshot atomically.
+        return {**self._identity(), "latitude": location["lat"], "longitude": location["lon"]}
 
-    # ─── LOCAL alarm handler (real-time siren, independent of the backend) ──
-    def _handle_alarm(self, any_triggered: bool, triggered: list):
-        cfg      = self.hardcoded_thresholds.get("alarm", {})
-        required = cfg.get("consecutive_readings_required", 3)
+    def _build_telemetry_payload(self, data):
+        pressure = data.get("pressure", {})
+        rain = data.get("rain", {})
+        flow = data.get("flow", {})
+        battery = data.get("battery", {})
+        depth = pressure.get("depth_m") if not pressure.get("error") else None
+        if depth is None:
+            depth = self._ultrasonic_depth(data)
+        return {**self._identity(), "telemetry": [{
+            "timestamp": data["_timestamp"],
+            "waterLevel": depth,
+            "waterLevelCurrentMa": pressure.get("current_ma"),
+            "distanceM": data.get("distance", {}).get("distance_m"),
+            "flowRateLpm": flow.get("flow_lpm"),
+            "flowTotalLiters": flow.get("total_liters"),
+            "rainfallTotalMm": rain.get("rainfall_total_mm"),
+            "rainfallLastHour": rain.get("rainfall_last_hour_mm"),
+            "batteryVoltage": battery.get("voltage"),
+            "batteryLevel": battery.get("percent"),
+        }]}
 
-        self._critical_streak = (self._critical_streak + 1) if any_triggered else 0
-        self.alarm.set_level("critical" if any_triggered else "normal")
+    def _build_heartbeat_payload(self, data):
+        return {**self._identity(), "batteryLevel": data.get("battery", {}).get("percent")}
 
-        if any_triggered and self._critical_streak >= required:
-            logger.warning("🔴 ALARM (local, siren sounding) — %d consecutive readings: %s",
-                           self._critical_streak, triggered)
+    def _build_ack_payload(self, command_id, status, error=""):
+        return {**self._identity(), "commandId": command_id, "status": status, "error": error}
 
-    # ─── Send the Location + Telemetry + Heartbeat bundle ─────────
-    def _send_bundle(self, data, reason: str):
-        logger.warning("📡 SEND (%s) -- Location + Telemetry + Heartbeat", reason)
+    def _handle_alarm(self, any_triggered, triggered):
+        required = self.hardcoded_thresholds.get("alarm", {}).get("consecutive_readings_required", 3)
+        self._critical_streak = min(self._critical_streak + 1, required) if any_triggered else 0
+        active = self._critical_streak >= required
+        self.alarm.set_level("critical" if active else "none")
+        if active:
+            logger.warning("Local flood alarm: %s", triggered)
 
-        location_payload  = self._build_location_payload()
-        logger.info(
-            "📍 Location sent: lat=%s, lon=%s | source=%s (%s)",
-            self._location.get("lat"), self._location.get("lon"),
-            self._location.get("source"),
-            "real GPS" if self._location.get("source") == "gps" else "config fallback, NOT from GPS",
-        )
-        telemetry_payload = self._build_telemetry_payload(data)
-        heartbeat_payload = self._build_heartbeat_payload(data)
+    def _send_bundle(self, data, reason, telemetry_payload=None):
+        self.db.queue_bundle([
+            (settings.location_endpoint(), self._build_location_payload()),
+            (settings.telemetry_endpoint(), telemetry_payload or self._build_telemetry_payload(data)),
+            (settings.heartbeat_endpoint(), self._build_heartbeat_payload(data)),
+        ])
+        self._upload_event.set()
+        logger.info("Queued location, telemetry and heartbeat: %s", reason)
 
-        self.db.log_reading(data, telemetry_payload)
-
-        self.api.send_location(location_payload, db=self.db)
-        self.api.send_telemetry(telemetry_payload, db=self.db)
-        delivered_hb, commands = self.api.send_heartbeat(heartbeat_payload, db=self.db)
-
-        if delivered_hb and commands:
-            self._process_commands(commands)
-
-        pending = self.db.count_pending_queue()
-        if pending:
-            logger.info("📦 %d item(s) still in the offline queue (will be retried by the separate thread).", pending)
-
-    # ─── Endpoint 4: execute a command from the heartbeat, then ACK ──
-    def _process_commands(self, commands: list):
-        for cmd in commands:
-            command_id = cmd.get("id", "")
-            command_name = cmd.get("command", "")
-            logger.warning("📥 Command received from backend: id=%s command=%s", command_id, command_name)
-
-            handler = self._COMMAND_HANDLERS.get(command_name)
-            if handler is None:
-                logger.error("Command '%s' is not recognised.", command_name)
-                ack = self._build_ack_payload(command_id, "FAILED", f"Unknown command: {command_name}")
-                self.api.send_command_ack(ack, db=self.db)
+    def _process_commands(self, commands):
+        for command in commands:
+            if not isinstance(command, dict):
                 continue
-
+            command_id = command.get("id", "")
+            name = command.get("command", "")
             try:
-                handler(self)
+                if name != "Reboot":
+                    raise ValueError(f"Unknown command: {name}")
+                self._cmd_reboot()
                 ack = self._build_ack_payload(command_id, "SUCCESS")
-            except Exception as e:
-                logger.error("Command '%s' failed: %s", command_name, e)
-                ack = self._build_ack_payload(command_id, "FAILED", str(e))
-
-            self.api.send_command_ack(ack, db=self.db)
+            except Exception as error:
+                ack = self._build_ack_payload(command_id, "FAILED", str(error))
+            self.db.queue_api(settings.command_ack_endpoint(), ack)
+            self._upload_event.set()
 
     def _cmd_reboot(self):
-        """
-        The spec asks for "execute -> wait until complete -> only then send the ACK".
-        For the Reboot command this is TECHNICALLY IMPOSSIBLE to satisfy literally --
-        the restart is dispatched through a DETACHED child process with a short delay,
-        and the ACK SUCCESS is sent IMMEDIATELY by the caller (_process_commands).
-        """
-        delay = settings.COMMAND_REBOOT_DELAY_SEC
-        logger.warning("🔄 Reboot scheduled in %ds (after the ACK is sent)...", delay)
+        if settings.RUN_MODE == "mock":
+            logger.info("MOCK Reboot command: service restart simulated")
+            return
+        delay = max(1, settings.COMMAND_REBOOT_DELAY_SEC)
+        # ACK means the service restart was scheduled, not that it completed.
         subprocess.Popen(
-            ["setsid", "bash", "-c", f"sleep {delay} && sudo -n systemctl restart efws.service"],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            stdin=subprocess.DEVNULL,
-            start_new_session=True,
+            ["bash", "-c", f"sleep {delay} && sudo -n systemctl restart efws.service"],
+            stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL, start_new_session=True,
         )
 
-    _COMMAND_HANDLERS = {
-        "Reboot": _cmd_reboot,
-    }
+    def run_cycle(self):
+        data = self._read_all()
+        triggered, reasons = self._evaluate(data)
+        self._handle_alarm(triggered, reasons)
+        telemetry = self._build_telemetry_payload(data)
+        self.db.log_reading(data, telemetry)
+        now = time.monotonic()
+        if triggered or self._last_routine_send is None or now - self._last_routine_send >= settings.ROUTINE_SEND_INTERVAL_SEC:
+            self._send_bundle(data, "emergency" if triggered else "routine", telemetry)
+            self._last_routine_send = now
+        logger.info("READ depth=%s m distance=%s m flow=%s L/min rain_1h=%s mm battery=%s V | triggers=%s",
+                    telemetry["telemetry"][0]["waterLevel"], data["distance"].get("distance_m"),
+                    data["flow"].get("flow_lpm"), data["rain"].get("rainfall_last_hour_mm"),
+                    data["battery"].get("voltage"), reasons)
+        return data
 
-    # ─── Main loop ───────────────────────────────────────────────
     def run(self):
-        logger.info(
-            "EFWS loop started. Threshold check every: %ds | Routine send (when normal) every: %ds | "
-            "Queue retry every: %ds (separate thread)",
-            settings.SENSOR_READ_INTERVAL_SEC,
-            settings.ROUTINE_SEND_INTERVAL_SEC,
-            settings.EFWS_CONNECTIVITY_CHECK_SEC,
-        )
+        for target in (self._flush_queue_loop, self._retention_loop, self._gps_loop):
+            thread = threading.Thread(target=target, name=target.__name__, daemon=True)
+            self._threads.append(thread)
+            thread.start()
         try:
-            while True:
-                data = self._read_all()
-                self._update_gps()
-
-                any_triggered, triggered = self._evaluate(data)
-
-                self._handle_alarm(any_triggered, triggered)
-
-                now = time.time()
-
-                if any_triggered:
-                    logger.warning("🚨 EMERGENCY -- threshold crossed: %s", triggered)
-                    self._send_bundle(data, reason="EMERGENCY")
-                    self._last_routine_send = now
-
-                elif now - self._last_routine_send >= settings.ROUTINE_SEND_INTERVAL_SEC:
-                    self._send_bundle(data, reason="routine")
-                    self._last_routine_send = now
-
-                else:
-                    next_routine_in = int(settings.ROUTINE_SEND_INTERVAL_SEC - (now - self._last_routine_send))
-                    logger.info(
-                        "READ | all values NORMAL — not sending (next routine send in %ds). "
-                        "water=%.2fm rain=%.1fmm",
-                        next_routine_in,
-                        data["pressure"].get("depth_m", 0) or 0,
-                        data["rain"].get("rainfall_mm", 0) or 0,
-                    )
-
-                time.sleep(settings.SENSOR_READ_INTERVAL_SEC)
-
+            while not self._stop_flag.is_set():
+                started = time.monotonic()
+                self.run_cycle()
+                self._stop_flag.wait(max(0, settings.SENSOR_READ_INTERVAL_SEC - (time.monotonic() - started)))
         except KeyboardInterrupt:
-            logger.info("EFWS stopped by the user (Ctrl+C).")
-        except Exception:
-            logger.critical("EFWS crash!\n%s", traceback.format_exc())
+            logger.info("Stopped by user")
         finally:
-            self._stop_flag.set()
-            self.alarm.silence()
-            for sensor in self.sensors.values():
-                close = getattr(sensor, "close", None)
-                if close is not None:
-                    close()
+            self.close()
+
+    def close(self):
+        if self._closed:
+            return
+        self._closed = True
+        self._stop_flag.set()
+        self._upload_event.set()
+        for resource in [self.alarm, *self.sensors.values()]:
+            cleanup = getattr(resource, "close", None) or getattr(resource, "silence", None)
+            if cleanup:
+                try:
+                    cleanup()
+                except Exception:
+                    logger.exception("Resource cleanup failed")
+        for thread in self._threads:
+            thread.join(timeout=5)
+        if not self._threads:
             self.api.close()
-            if self.sim:
-                self.sim.close()
+        if not any(t.is_alive() and t.name != "_gps_loop" for t in self._threads):
             self.db.close()
-            logger.info("EFWS shutdown complete.")
+        from sensors.mcp3008 import close_mcp3008
+        close_mcp3008()
+
+
+def main():
+    Path(settings.LOG_PATH).parent.mkdir(parents=True, exist_ok=True)
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+                        handlers=[logging.StreamHandler(), logging.FileHandler(settings.LOG_PATH, encoding="utf-8")])
+    app = EFWS()
+    signal.signal(signal.SIGTERM, lambda *_: app._stop_flag.set())
+    app.run()
 
 
 if __name__ == "__main__":
-    efws = EFWS()
-    efws.run()
+    main()

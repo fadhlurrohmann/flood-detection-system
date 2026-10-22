@@ -53,7 +53,7 @@ def main():
 
         for i, item in enumerate(items, 1):
             t     = item.get("telemetry", [{}])[0]
-            rain  = t.get("rainfallMm", "?")
+            rain  = t.get("rainfallLastHour", "?")
             wl    = t.get("waterLevel", "?")
             edge  = f"  [{t.get('_edgeCase','')}]" if "_edgeCase" in t else ""
             total += 1

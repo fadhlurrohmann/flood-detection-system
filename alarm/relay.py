@@ -23,8 +23,7 @@ class Relay:
         if GPIO is None:
             raise RuntimeError("RPi.GPIO is not available - run this on a Raspberry Pi")
         GPIO.setmode(GPIO.BCM)
-        GPIO.setup(self.pin, GPIO.OUT)
-        self.off()
+        GPIO.setup(self.pin, GPIO.OUT, initial=GPIO.HIGH if self.active_low else GPIO.LOW)
 
     def on(self):
         GPIO.output(self.pin, GPIO.LOW if self.active_low else GPIO.HIGH)
@@ -35,3 +34,7 @@ class Relay:
     def is_on(self) -> bool:
         state = GPIO.input(self.pin)
         return (state == GPIO.LOW) if self.active_low else (state == GPIO.HIGH)
+
+    def close(self):
+        self.off()
+        GPIO.cleanup(self.pin)

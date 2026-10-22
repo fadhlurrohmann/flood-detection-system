@@ -5,7 +5,9 @@ The .env file must NOT be committed to git — see .env.example for the template
 """
 import os
 from pathlib import Path
+
 from dotenv import load_dotenv
+
 
 # ─── Find .env automatically (walk up the folders until it is found) ─────────
 def _find_and_load_dotenv():
@@ -17,17 +19,13 @@ def _find_and_load_dotenv():
     for candidate in [search_start, *search_start.parents[:2]]:
         env_file = candidate / ".env"
         if env_file.exists():
-            print(f"✅  Found .env at {env_file}, loading...")
-            load_dotenv(env_file, override=True)
-            return candidate   # return the root that was found
+            load_dotenv(env_file, override=False)
+            return search_start.parent
     # .env not found — load_dotenv still runs (reads system env vars only)
-    print("❌  .env not found, using system environment variables only.")
-    load_dotenv(override=True)
+    load_dotenv(override=False)
     return search_start.parent   # project root (one level above config/)
 
 _ROOT = _find_and_load_dotenv()
-print("ROOT :", _ROOT)
-print("EFWS_API_URL =", os.getenv("EFWS_API_URL"))
 
 
 # ─── Helper ──────────────────────────────────────────────────────────────────
@@ -64,15 +62,16 @@ DEVICE_LOCATION = {
 }
 
 # ─── Operating mode ──────────────────────────────────────────────────────────
-RUN_MODE = _opt("EFWS_RUN_MODE", "hardware")
+RUN_MODE = _opt("EFWS_RUN_MODE", "hardware").lower()
+if RUN_MODE not in ("hardware", "mock"):
+    raise ValueError("EFWS_RUN_MODE must be hardware or mock")
 
-# ─── I2C (BME280 — ambient temperature/humidity/pressure, native I2C) ───────
+# ─── I2C rainfall; BME280 address retained for future hardware tests ───────
 I2C_BUS        = _int("EFWS_I2C_BUS", 1)
 BME280_ADDRESS = int(_opt("EFWS_BME280_ADDR", "0x76"), 16)
 
 # ─── SPI / MCP3008 (8-channel ADC, direct analog input, WITHOUT an LLC) ─────
 # Hardware version: 1x MCP3008, 1x LLC (only for 5V digital signals → GPIO),
-# RS485 anemometer (direct USB, no LLC),
 # submersible pressure sensor (4-20mA loop + burden resistor), DC 0-25V
 # battery voltage sensor module, and a 4G modem (A7670E OR SIM7600 — auto-detect,
 # only one is installed).
@@ -92,9 +91,7 @@ ADC_CHANNEL_BATTERY         = _int("EFWS_ADC_BATTERY",       3)   # voltage sens
 # CH1, CH4-CH7 are not wired — physical spares on the MCP3008; CH2 is damaged
 
 # ─── Gravity Rainfall Sensor (DFRobot SEN0575) ─────────────────────────────
-I2C_BUS = 1
-# DFRobot SEN0575
-RAINFALL_I2C_ADDRESS = 0x1D
+RAINFALL_I2C_ADDRESS = int(_opt("EFWS_RAINFALL_ADDR", "0x1D"), 0)
 # Read interval (seconds)
 RAINFALL_READ_INTERVAL = 2
 
@@ -119,11 +116,18 @@ GPIO_STATUS_LED   = _int("EFWS_GPIO_LED",    23)
 
 
 #-------- JSN-SR04T----------
-GPIO_JSN_TRIG = _int("EWF_JSN_TRIG", 22)
-GPIO_JSN_ECHO = _int("EWF_JSN_ECHO", 18)
+GPIO_JSN_TRIG = _int("EFWS_JSN_TRIG", _int("EWF_JSN_TRIG", 22))
+GPIO_JSN_ECHO = _int("EFWS_JSN_ECHO", _int("EWF_JSN_ECHO", 18))
+JSN_MAX_DISTANCE_M = _float("EFWS_JSN_MAX_DISTANCE_M", 4.5)
+# Height of the ultrasonic face above the same zero datum used for water depth.
+# Leave unset until measured; distance is still reported, but no depth is inferred.
+ULTRASONIC_MOUNT_HEIGHT_M = (
+    _float("EFWS_ULTRASONIC_MOUNT_HEIGHT_M", 0)
+    if _opt("EFWS_ULTRASONIC_MOUNT_HEIGHT_M") else None
+)
 
 #------- YF-S201-------------
-GPIO_YF = _int("EWF_GPIO_YF", 16)
+GPIO_YF = _int("EFWS_GPIO_YF", _int("EWF_GPIO_YF", 16))
 FLOW_PULSES_PER_LITER = _float("EFWS_FLOW_PULSES_PER_LITER", 450.0)
 
 # ─── RS485 wind-speed anemometer (Modbus RTU) ───────────────────────────────
@@ -139,6 +143,8 @@ ANEMOMETER_SPEED_SCALE = _float("EFWS_ANEM_SPEED_SCALE", 0.1)
 A7670E_AT_PORT  = _opt("EFWS_SIM_PORT", "/dev/ttyUSB2")
 A7670E_BAUDRATE = _int("EFWS_A7670E_BAUD", 115200)
 APN              = _opt("EFWS_APN", "internet")
+GPS_TIMEOUT = _int("EFWS_GPS_TIMEOUT", 90)
+GPS_INTERVAL_SEC = _int("EFWS_GPS_INTERVAL", 180)
 
 # ─── REST API ────────────────────────────────────────────────────────────────
 API_BASE_URL       = _req("EFWS_API_URL")
@@ -155,7 +161,7 @@ def _base_url() -> str:
     return os.getenv("EFWS_API_URL", API_BASE_URL).rstrip("/")
 
 def telemetry_endpoint() -> str:
-    """Sensor data (waterLevel, rainfallMm, etc.). Its response carries 'config' (remote thresholds)."""
+    """Sensor data (waterLevel, rainfallLastHour, etc.); response carries config."""
     return _base_url() + "/sensors/telemetry"
 
 def location_endpoint() -> str:
@@ -191,16 +197,13 @@ DB_RETENTION_CHECK_SEC   = _int("EFWS_DB_RETENTION_CHECK_SEC", 6 * 3600)  # chec
 LOG_PATH = _opt("EFWS_LOG_PATH", str(_ROOT / "logs" / "efws.log"))
 
 # ─── Timing ──────────────────────────────────────────────────────────────────
-# Sensor CHECK cycle -- always runs every this interval, purely evaluating
-# thresholds (fast, for responsive emergency detection). Does NOT always mean
-# sending data -- see ROUTINE_SEND_INTERVAL_SEC below.
+# Sensor read, local alarm evaluation, and local logging cadence.
 SENSOR_READ_INTERVAL_SEC = _int("EFWS_READ_INTERVAL", 180)
 
 # Routine SEND cycle (location+telemetry+heartbeat) in NORMAL conditions --
 # DELIBERATELY separate from SENSOR_READ_INTERVAL_SEC: thresholds are still checked every
 # 3 minutes (fast response in an emergency), but when everything is normal, the device
-# only needs to report to the backend every ROUTINE_SEND_INTERVAL_SEC (default 3600s /
-# 60 minutes) so it does not look dead/missing without flooding the API.
+# only needs to report to the backend every ROUTINE_SEND_INTERVAL_SEC (default 360s).
 # As soon as a threshold is crossed, send IMMEDIATELY at that moment
 # ("emergency upload") without waiting for this routine schedule, and the routine schedule
 # is reset from that point (because the backend has just received a report).
@@ -220,3 +223,17 @@ COMMAND_REBOOT_DELAY_SEC = _int("EFWS_REBOOT_DELAY_SEC", 5)
 
 # ─── Threshold file ──────────────────────────────────────────────────────────
 THRESHOLDS_PATH = str(_ROOT / "config" / "thresholds.json")
+
+for _key, _value in {
+    "EFWS_READ_INTERVAL": SENSOR_READ_INTERVAL_SEC,
+    "EFWS_ROUTINE_SEND_INTERVAL_SEC": ROUTINE_SEND_INTERVAL_SEC,
+    "EFWS_CONNECTIVITY_CHECK_SEC": EFWS_CONNECTIVITY_CHECK_SEC,
+    "EFWS_DB_RETENTION_DAYS": DB_RETENTION_DAYS,
+    "EFWS_DB_RETENTION_CHECK_SEC": DB_RETENTION_CHECK_SEC,
+    "EFWS_GPS_TIMEOUT": GPS_TIMEOUT,
+    "EFWS_GPS_INTERVAL": GPS_INTERVAL_SEC,
+    "EFWS_API_TIMEOUT": API_TIMEOUT_SEC,
+    "EFWS_API_RETRIES": API_MAX_RETRIES,
+}.items():
+    if _value <= 0:
+        raise ValueError(f"{_key} must be positive")

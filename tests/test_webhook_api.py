@@ -19,7 +19,6 @@ print("=" * 60)
 print("  TEST API Connectivity")
 print("=" * 60)
 print(f"deviceId    : {settings.DEVICE_ID}")
-print(f"deviceToken : {settings.DEVICE_TOKEN}")
 print(f"endpoint    : {settings.telemetry_endpoint()}\n")
 
 if "webhook.site/xxxxxxxx" in settings.API_BASE_URL:
@@ -32,13 +31,15 @@ sample = {
     "deviceToken": settings.DEVICE_TOKEN,
     "telemetry": [{
         "timestamp":            datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z",
-        "waterLevel":           3.3,
-        "waterLevelCurrentMa":  14.6,
-        "temp":                 29.5,
-        "humidity":             63.0,
+        "waterLevel":           0.2,
+        "waterLevelCurrentMa":  5.067,
+        "distanceM":            2.8,
+        "flowRateLpm":          5.0,
+        "flowTotalLiters":      10.0,
+        "rainfallTotalMm":      20.0,
+        "rainfallLastHour":     1.0,
+        "batteryVoltage":      12.06,
         "batteryLevel":         85.0,
-        "flameDetected":        False,
-        "windSpeed":            2.5,
     }]
 }
 

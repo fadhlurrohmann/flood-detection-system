@@ -16,12 +16,16 @@ it means ONLY water falls back to local, the other fields still use remote.
 of the API response (stored by APIPublisher.remote_config).
 This module keeps no state of its own -- it is a pure merge function.
 """
+import math
 from typing import Any, Optional
 
 
 def _pick(remote_value: Any, local_value: Any) -> Any:
     """Remote wins if present and not None; otherwise use local."""
-    return local_value if remote_value is None else remote_value
+    if isinstance(remote_value, (int, float)) and not isinstance(remote_value, bool):
+        if math.isfinite(remote_value) and remote_value >= 0:
+            return remote_value
+    return local_value
 
 
 def resolve_active_thresholds(local: dict, remote_config: Optional[dict]) -> dict:
@@ -37,8 +41,6 @@ def resolve_active_thresholds(local: dict, remote_config: Optional[dict]) -> dic
     resolved["waterDangerThreshold"] = _pick(
         remote.get("waterDangerThreshold"), local["waterDangerThreshold"]
     )
-    # rainfallDangerThreshold is not in thresholds.json yet -- if the backend also
-    # has not sent it, the result is None and _evaluate does not trigger a rain alarm.
     resolved["rainfallDangerThreshold"] = _pick(
         remote.get("rainfallDangerThreshold"), local.get("rainfallDangerThreshold")
     )

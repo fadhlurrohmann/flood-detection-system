@@ -9,9 +9,10 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 TESTS = [
     ("Submersible pressure", "sensors.pressure", "PressureWaterSensor", "read"),
-    ##("Rainfall", "sensors.rainfall", "RainfallSensor", "read"),
+    ("Rainfall", "sensors.rainfall", "RainfallSensor", "read"),
     ("Ultrasonic distance", "sensors.JSN_SR04T", "JSN_SR04T", "read"),
     ("Water flow", "sensors.YF_S201", "YFS201", "read_flow_rate"),
+    ("Battery voltage", "sensors.battery", "BatterySensor", "read"),
 ]
 
 
@@ -27,6 +28,10 @@ def main():
             module = importlib.import_module(module_name)
             sensor = getattr(module, class_name)()
             reading = getattr(sensor, read_method)()
+            if reading is None:
+                raise RuntimeError("No measurement received")
+            if isinstance(reading, dict) and (reading.get("fault_open_loop") or reading.get("fault_out_of_range")):
+                raise RuntimeError(f"Pressure loop fault: {reading}")
             print(f"  Reading: {reading}")
             results[name] = "OK"
         except Exception as error:
@@ -41,6 +46,8 @@ def main():
     print("=" * 60)
     for name, status in results.items():
         print(f"  {status:6s}  {name}")
+    from sensors.mcp3008 import close_mcp3008
+    close_mcp3008()
 
     if "FAILED" in results.values():
         print("\nFor failed sensors:")

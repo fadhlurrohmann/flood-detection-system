@@ -10,6 +10,7 @@ Calculation:
   V_battery = V_s × BATTERY_DIVIDER_RATIO        (30k/7.5k module → ÷5)
   A 14.4V battery → V_s 2.88V, still below VREF 3.3V.
 """
+import math
 import statistics
 
 from config import settings
@@ -25,6 +26,9 @@ class BatterySensor:
         self.vref         = vref         if vref         is not None else settings.MCP3008_VREF
         self.batt_max_v   = batt_max_v   if batt_max_v   is not None else settings.BATTERY_MAX_V
         self.batt_min_v   = batt_min_v   if batt_min_v   is not None else settings.BATTERY_MIN_V
+        if (not all(math.isfinite(v) for v in (self.ratio, self.vref, self.batt_max_v, self.batt_min_v))
+                or self.ratio <= 0 or self.vref <= 0 or self.batt_max_v <= self.batt_min_v):
+            raise ValueError("Invalid battery voltage calibration")
         self.adc          = get_mcp3008()
 
     def read_raw(self) -> int:
@@ -46,7 +50,10 @@ class BatterySensor:
         return self.voltage_to_percent(self.read_voltage())
 
     def read(self) -> dict:
-        v = self.read_voltage()   # one reading → voltage & percent stay consistent
+        raw = self.read_raw()
+        if raw >= 1023:
+            raise ValueError("Battery ADC saturated; check divider ratio and input voltage")
+        v = self.raw_to_voltage(raw)
         return {"voltage": v, "percent": self.voltage_to_percent(v)}
 
 

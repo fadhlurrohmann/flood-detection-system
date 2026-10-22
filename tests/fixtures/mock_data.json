@@ -4,14 +4,16 @@
     "deviceToken": "test",
     "telemetry": [
       {
-        "timestamp": "2025-06-30T07:00:00.000Z",
-        "waterLevel": 3.459,
-        "waterLevelCurrentMa": 15.069,
-        "temp": 29.23,
-        "humidity": 61.95,
-        "batteryLevel": 85.0,
-        "flameDetected": false,
-        "windSpeed": 2.33
+        "timestamp": "2026-10-21T00:00:00.000Z",
+        "waterLevel": 0.2,
+        "waterLevelCurrentMa": 5.067,
+        "distanceM": 2.8,
+        "flowRateLpm": 5.0,
+        "flowTotalLiters": 0.0,
+        "rainfallTotalMm": 2.0,
+        "rainfallLastHour": 0.5,
+        "batteryVoltage": 12.06,
+        "batteryLevel": 85.0
       }
     ]
   },
@@ -20,14 +22,16 @@
     "deviceToken": "test",
     "telemetry": [
       {
-        "timestamp": "2025-06-30T07:00:05.000Z",
-        "waterLevel": 2.538,
-        "waterLevelCurrentMa": 12.122,
-        "temp": 29.17,
-        "humidity": 63.02,
-        "batteryLevel": 85.0,
-        "flameDetected": false,
-        "windSpeed": 2.52
+        "timestamp": "2026-10-21T00:01:00.000Z",
+        "waterLevel": 0.2,
+        "waterLevelCurrentMa": 5.067,
+        "distanceM": 2.8,
+        "flowRateLpm": 5.0,
+        "flowTotalLiters": 5.0,
+        "rainfallTotalMm": 2.0,
+        "rainfallLastHour": 0.5,
+        "batteryVoltage": 12.06,
+        "batteryLevel": 85.0
       }
     ]
   },
@@ -36,14 +40,16 @@
     "deviceToken": "test",
     "telemetry": [
       {
-        "timestamp": "2025-06-30T07:00:10.000Z",
-        "waterLevel": 2.913,
-        "waterLevelCurrentMa": 13.322,
-        "temp": 29.86,
-        "humidity": 61.13,
-        "batteryLevel": 85.0,
-        "flameDetected": false,
-        "windSpeed": 2.36
+        "timestamp": "2026-10-21T00:02:00.000Z",
+        "waterLevel": 0.2,
+        "waterLevelCurrentMa": 5.067,
+        "distanceM": 2.8,
+        "flowRateLpm": 5.0,
+        "flowTotalLiters": 10.0,
+        "rainfallTotalMm": 2.0,
+        "rainfallLastHour": 0.5,
+        "batteryVoltage": 12.06,
+        "batteryLevel": 85.0
       }
     ]
   },
@@ -52,14 +58,16 @@
     "deviceToken": "test",
     "telemetry": [
       {
-        "timestamp": "2025-06-30T07:00:15.000Z",
-        "waterLevel": 2.835,
-        "waterLevelCurrentMa": 13.072,
-        "temp": 29.02,
-        "humidity": 61.48,
-        "batteryLevel": 85.0,
-        "flameDetected": false,
-        "windSpeed": 2.59
+        "timestamp": "2026-10-21T00:03:00.000Z",
+        "waterLevel": 0.2,
+        "waterLevelCurrentMa": 5.067,
+        "distanceM": 2.8,
+        "flowRateLpm": 5.0,
+        "flowTotalLiters": 15.0,
+        "rainfallTotalMm": 2.0,
+        "rainfallLastHour": 0.5,
+        "batteryVoltage": 12.06,
+        "batteryLevel": 85.0
       }
     ]
   },
@@ -68,14 +76,16 @@
     "deviceToken": "test",
     "telemetry": [
       {
-        "timestamp": "2025-06-30T07:00:20.000Z",
-        "waterLevel": 3.605,
-        "waterLevelCurrentMa": 15.536,
-        "temp": 29.36,
-        "humidity": 63.2,
-        "batteryLevel": 85.0,
-        "flameDetected": false,
-        "windSpeed": 2.53
+        "timestamp": "2026-10-21T00:04:00.000Z",
+        "waterLevel": 0.2,
+        "waterLevelCurrentMa": 5.067,
+        "distanceM": 2.8,
+        "flowRateLpm": 5.0,
+        "flowTotalLiters": 20.0,
+        "rainfallTotalMm": 2.0,
+        "rainfallLastHour": 0.5,
+        "batteryVoltage": 12.06,
+        "batteryLevel": 85.0
       }
     ]
   },
@@ -84,14 +94,16 @@
     "deviceToken": "test",
     "telemetry": [
       {
-        "timestamp": "2025-06-30T07:00:25.000Z",
-        "waterLevel": 3.515,
-        "waterLevelCurrentMa": 15.248,
-        "temp": 29.18,
-        "humidity": 62.2,
-        "batteryLevel": 85.0,
-        "flameDetected": false,
-        "windSpeed": 2.41
+        "timestamp": "2026-10-21T00:05:00.000Z",
+        "waterLevel": 0.2,
+        "waterLevelCurrentMa": 5.067,
+        "distanceM": 2.8,
+        "flowRateLpm": 5.0,
+        "flowTotalLiters": 25.0,
+        "rainfallTotalMm": 2.0,
+        "rainfallLastHour": 0.5,
+        "batteryVoltage": 12.06,
+        "batteryLevel": 85.0
       }
     ]
   },
@@ -100,14 +112,16 @@
     "deviceToken": "test",
     "telemetry": [
       {
-        "timestamp": "2025-06-30T07:00:30.000Z",
-        "waterLevel": 3.838,
-        "waterLevelCurrentMa": 16.282,
-        "temp": 29.35,
-        "humidity": 61.9,
-        "batteryLevel": 85.0,
-        "flameDetected": false,
-        "windSpeed": 2.54
+        "timestamp": "2026-10-21T00:06:00.000Z",
+        "waterLevel": 0.2,
+        "waterLevelCurrentMa": 5.067,
+        "distanceM": 2.8,
+        "flowRateLpm": 5.0,
+        "flowTotalLiters": 30.0,
+        "rainfallTotalMm": 2.0,
+        "rainfallLastHour": 0.5,
+        "batteryVoltage": 12.06,
+        "batteryLevel": 85.0
       }
     ]
   },
@@ -116,14 +130,16 @@
     "deviceToken": "test",
     "telemetry": [
       {
-        "timestamp": "2025-06-30T07:00:35.000Z",
-        "waterLevel": 2.63,
-        "waterLevelCurrentMa": 12.416,
-        "temp": 29.1,
-        "humidity": 62.54,
-        "batteryLevel": 85.0,
-        "flameDetected": false,
-        "windSpeed": 2.57
+        "timestamp": "2026-10-21T00:07:00.000Z",
+        "waterLevel": 0.2,
+        "waterLevelCurrentMa": 5.067,
+        "distanceM": 2.8,
+        "flowRateLpm": 5.0,
+        "flowTotalLiters": 35.0,
+        "rainfallTotalMm": 2.0,
+        "rainfallLastHour": 0.5,
+        "batteryVoltage": 12.06,
+        "batteryLevel": 85.0
       }
     ]
   },
@@ -132,14 +148,16 @@
     "deviceToken": "test",
     "telemetry": [
       {
-        "timestamp": "2025-06-30T07:00:40.000Z",
-        "waterLevel": 1.169,
-        "waterLevelCurrentMa": 7.741,
-        "temp": 46.49,
-        "humidity": 27.21,
-        "batteryLevel": 85.0,
-        "flameDetected": false,
-        "windSpeed": 9.64
+        "timestamp": "2026-10-21T00:08:00.000Z",
+        "waterLevel": 0.45,
+        "waterLevelCurrentMa": 6.4,
+        "distanceM": 2.55,
+        "flowRateLpm": 5.0,
+        "flowTotalLiters": 40.0,
+        "rainfallTotalMm": 80,
+        "rainfallLastHour": 20,
+        "batteryVoltage": 12.06,
+        "batteryLevel": 85.0
       }
     ]
   },
@@ -148,14 +166,16 @@
     "deviceToken": "test",
     "telemetry": [
       {
-        "timestamp": "2025-06-30T07:00:45.000Z",
-        "waterLevel": 1.012,
-        "waterLevelCurrentMa": 7.238,
-        "temp": 47.29,
-        "humidity": 27.82,
-        "batteryLevel": 85.0,
-        "flameDetected": false,
-        "windSpeed": 8.63
+        "timestamp": "2026-10-21T00:09:00.000Z",
+        "waterLevel": 0.45,
+        "waterLevelCurrentMa": 6.4,
+        "distanceM": 2.55,
+        "flowRateLpm": 5.0,
+        "flowTotalLiters": 45.0,
+        "rainfallTotalMm": 80,
+        "rainfallLastHour": 20,
+        "batteryVoltage": 12.06,
+        "batteryLevel": 85.0
       }
     ]
   },
@@ -164,14 +184,16 @@
     "deviceToken": "test",
     "telemetry": [
       {
-        "timestamp": "2025-06-30T07:00:50.000Z",
-        "waterLevel": 1.087,
-        "waterLevelCurrentMa": 7.478,
-        "temp": 47.16,
-        "humidity": 28.67,
-        "batteryLevel": 85.0,
-        "flameDetected": false,
-        "windSpeed": 9.01
+        "timestamp": "2026-10-21T00:10:00.000Z",
+        "waterLevel": 0.45,
+        "waterLevelCurrentMa": 6.4,
+        "distanceM": 2.55,
+        "flowRateLpm": 5.0,
+        "flowTotalLiters": 50.0,
+        "rainfallTotalMm": 80,
+        "rainfallLastHour": 20,
+        "batteryVoltage": 12.06,
+        "batteryLevel": 85.0
       }
     ]
   },
@@ -180,14 +202,16 @@
     "deviceToken": "test",
     "telemetry": [
       {
-        "timestamp": "2025-06-30T07:00:55.000Z",
-        "waterLevel": 1.202,
-        "waterLevelCurrentMa": 7.846,
-        "temp": 46.27,
-        "humidity": 28.21,
-        "batteryLevel": 85.0,
-        "flameDetected": false,
-        "windSpeed": 8.83
+        "timestamp": "2026-10-21T00:11:00.000Z",
+        "waterLevel": 0.45,
+        "waterLevelCurrentMa": 6.4,
+        "distanceM": 2.55,
+        "flowRateLpm": 5.0,
+        "flowTotalLiters": 55.0,
+        "rainfallTotalMm": 80,
+        "rainfallLastHour": 20,
+        "batteryVoltage": 12.06,
+        "batteryLevel": 85.0
       }
     ]
   },
@@ -196,14 +220,16 @@
     "deviceToken": "test",
     "telemetry": [
       {
-        "timestamp": "2025-06-30T07:01:00.000Z",
-        "waterLevel": 0.207,
-        "waterLevelCurrentMa": 4.662,
-        "temp": 63.17,
-        "humidity": 11.24,
-        "batteryLevel": 85.0,
-        "flameDetected": false,
-        "windSpeed": 17.1
+        "timestamp": "2026-10-21T00:12:00.000Z",
+        "waterLevel": 1.0,
+        "waterLevelCurrentMa": 9.333,
+        "distanceM": 2.0,
+        "flowRateLpm": 5.0,
+        "flowTotalLiters": 60.0,
+        "rainfallTotalMm": 140,
+        "rainfallLastHour": 35,
+        "batteryVoltage": 12.06,
+        "batteryLevel": 85.0
       }
     ]
   },
@@ -212,14 +238,16 @@
     "deviceToken": "test",
     "telemetry": [
       {
-        "timestamp": "2025-06-30T07:01:05.000Z",
-        "waterLevel": 0.25,
-        "waterLevelCurrentMa": 4.8,
-        "temp": 61.04,
-        "humidity": 10.96,
-        "batteryLevel": 85.0,
-        "flameDetected": false,
-        "windSpeed": 16.36
+        "timestamp": "2026-10-21T00:13:00.000Z",
+        "waterLevel": 1.0,
+        "waterLevelCurrentMa": 9.333,
+        "distanceM": 2.0,
+        "flowRateLpm": 5.0,
+        "flowTotalLiters": 65.0,
+        "rainfallTotalMm": 140,
+        "rainfallLastHour": 35,
+        "batteryVoltage": 12.06,
+        "batteryLevel": 85.0
       }
     ]
   },
@@ -228,14 +256,16 @@
     "deviceToken": "test",
     "telemetry": [
       {
-        "timestamp": "2025-06-30T07:01:10.000Z",
-        "waterLevel": 0.362,
-        "waterLevelCurrentMa": 5.158,
-        "temp": 63.02,
-        "humidity": 11.24,
-        "batteryLevel": 85.0,
-        "flameDetected": false,
-        "windSpeed": 16.06
+        "timestamp": "2026-10-21T00:14:00.000Z",
+        "waterLevel": 1.0,
+        "waterLevelCurrentMa": 9.333,
+        "distanceM": 2.0,
+        "flowRateLpm": 5.0,
+        "flowTotalLiters": 70.0,
+        "rainfallTotalMm": 140,
+        "rainfallLastHour": 35,
+        "batteryVoltage": 12.06,
+        "batteryLevel": 85.0
       }
     ]
   }

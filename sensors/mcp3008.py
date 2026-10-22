@@ -79,6 +79,14 @@ def get_mcp3008() -> "MCP3008":
     return _instance
 
 
+def close_mcp3008():
+    """Close the shared ADC once, after all analog sensors have stopped."""
+    global _instance
+    if _instance is not None:
+        _instance.close()
+        _instance = None
+
+
 if __name__ == "__main__":
     import time
     adc = MCP3008()

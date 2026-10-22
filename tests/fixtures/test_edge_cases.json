@@ -4,15 +4,16 @@
     "deviceToken": "test",
     "telemetry": [
       {
-        "timestamp": "2025-06-30T07:00:00.000Z",
-        "waterLevel": 0.375,
-        "waterLevelCurrentMa": 5.2,
-        "temp": 29.5,
-        "humidity": 63.0,
-        "batteryLevel": 85.0,
-        "flameDetected": false,
-        "windSpeed": 2.5,
-        "_edgeCase": "flame only — instant CRITICAL"
+        "timestamp": "2026-10-21T00:00:00.000Z",
+        "waterLevel": 0.5,
+        "waterLevelCurrentMa": 6.667,
+        "distanceM": 2.5,
+        "flowRateLpm": 5.0,
+        "flowTotalLiters": 0.0,
+        "rainfallTotalMm": 0.0,
+        "rainfallLastHour": 0.0,
+        "batteryVoltage": 12.06,
+        "batteryLevel": 85.0
       }
     ]
   },
@@ -21,15 +22,52 @@
     "deviceToken": "test",
     "telemetry": [
       {
-        "timestamp": "2025-06-30T07:00:00.000Z",
-        "waterLevel": 0.285,
-        "waterLevelCurrentMa": 4.912,
-        "temp": 29.5,
-        "humidity": 63.0,
-        "batteryLevel": 85.0,
-        "flameDetected": false,
-        "windSpeed": 15.1,
-        "_edgeCase": "wind only 15.1m/s — CRITICAL"
+        "timestamp": "2026-10-21T00:00:00.000Z",
+        "waterLevel": 0.499,
+        "waterLevelCurrentMa": 6.661,
+        "distanceM": 2.501,
+        "flowRateLpm": 5.0,
+        "flowTotalLiters": 0.0,
+        "rainfallTotalMm": 119.996,
+        "rainfallLastHour": 29.999,
+        "batteryVoltage": 12.06,
+        "batteryLevel": 85.0
+      }
+    ]
+  },
+  {
+    "deviceId": "efws-001",
+    "deviceToken": "test",
+    "telemetry": [
+      {
+        "timestamp": "2026-10-21T00:00:00.000Z",
+        "waterLevel": 0.2,
+        "waterLevelCurrentMa": 5.067,
+        "distanceM": 2.8,
+        "flowRateLpm": 5.0,
+        "flowTotalLiters": 0.0,
+        "rainfallTotalMm": 120.0,
+        "rainfallLastHour": 30.0,
+        "batteryVoltage": 12.06,
+        "batteryLevel": 85.0
+      }
+    ]
+  },
+  {
+    "deviceId": "efws-001",
+    "deviceToken": "test",
+    "telemetry": [
+      {
+        "timestamp": "2026-10-21T00:00:00.000Z",
+        "waterLevel": null,
+        "waterLevelCurrentMa": null,
+        "distanceM": null,
+        "flowRateLpm": null,
+        "flowTotalLiters": null,
+        "rainfallTotalMm": null,
+        "rainfallLastHour": null,
+        "batteryVoltage": null,
+        "batteryLevel": null
       }
     ]
   }

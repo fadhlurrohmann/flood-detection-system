@@ -6,6 +6,7 @@ Use a LLC between the 5V signal and Raspberry Pi GPIO.
 import math
 import threading
 import time
+
 from config import settings
 
 try:
@@ -34,9 +35,15 @@ class YFS201:
         self.pulse_count = 0
         self._last_read = time.monotonic()
         options = {"pin": self.GPIO_YF, "pull_up": False}
-        if LGPIOFactory is not None:
-            options["pin_factory"] = LGPIOFactory()
-        self.sensor = DigitalInputDevice(**options)
+        self._factory = LGPIOFactory() if LGPIOFactory is not None else None
+        if self._factory is not None:
+            options["pin_factory"] = self._factory
+        try:
+            self.sensor = DigitalInputDevice(**options)
+        except Exception:
+            if self._factory is not None:
+                self._factory.close()
+            raise
         self.sensor.when_activated = self._count_pulse
 
     def _count_pulse(self):
@@ -74,3 +81,5 @@ class YFS201:
 
     def close(self):
         self.sensor.close()
+        if self._factory is not None:
+            self._factory.close()

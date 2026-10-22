@@ -3,11 +3,13 @@ Mock sensor layer for testing WITHOUT hardware.
 Produces realistic data with random variation and scheduled danger scenarios,
 so the alarm logic, database, and API publisher can be fully tested on a desktop/Pi.
 
-Active when EFWS_RUN_MODE=mock (default).
+Active when EFWS_RUN_MODE=mock.
 """
-import math
+import logging
 import random
 import time
+
+from config import settings
 
 
 # ─── Helper ──────────────────────────────────────────────────────
@@ -33,8 +35,8 @@ class _MockBase:
 
 # ─── Submersible Pressure Sensor (water level, 4-20mA loop) ──────
 class MockPressureWater(_MockBase):
-    MA_BASE = {"normal": 14.0, "warning": 7.0, "critical": 4.5}  # lower = shallower/emptier
-    RANGE_M = 5.0
+    MA_BASE = {"normal": 5.0, "warning": 9.0, "critical": 17.0}
+    RANGE_M = settings.PRESSURE_RANGE_M
 
     def read(self) -> dict:
         sc   = self._scenario()
@@ -58,7 +60,6 @@ class MockRainfall(_MockBase):
         sc          = self._scenario()
         rainfall_mm = max(0.0, _jitter(self.RAINFALL_BASE[sc], 0.08))
         return {
-            "rainfall_mm":           round(rainfall_mm, 3),
             "rainfall_last_hour_mm": round(rainfall_mm, 3),
             "rainfall_total_mm":     round(rainfall_mm * 4, 3),
             "tip_counter":           int(rainfall_mm / 0.2794),
@@ -73,7 +74,7 @@ class MockBattery(_MockBase):
     def read(self) -> dict:
         sc  = self._scenario()
         pct = max(0.0, min(100.0, _jitter(self.PCT_BASE[sc], 0.04)))
-        v   = round(9.0 + pct / 100 * 3.6, 2)
+        v = round(settings.BATTERY_MIN_V + pct / 100 * (settings.BATTERY_MAX_V - settings.BATTERY_MIN_V), 2)
         return {"voltage": v, "percent": round(pct, 1), "_mock": True, "_scenario": sc}
 
 
@@ -88,8 +89,7 @@ class MockAlarmController:
         if level == self.current_level:
             return
         self.current_level = level
-        icon = self.LEVELS.get(level, "⚪")
-        print(f"  [ALARM] {icon}  Level → {level.upper()}")
+        logging.getLogger("efws.mock").info("Mock alarm: %s", level)
 
     def silence(self):
         self.set_level("none")
@@ -109,3 +109,8 @@ class MockWaterflow:
         self._total_liters += flow * elapsed / 60
         return {"flow_lpm": flow, "total_liters": round(self._total_liters, 4),
                 "sample_duration_sec": elapsed, "_mock": True}
+
+
+class MockDistance(_MockBase):
+    def read(self):
+        return _jitter({"normal": 2.5, "warning": 1.5, "critical": 0.5}[self._scenario()])

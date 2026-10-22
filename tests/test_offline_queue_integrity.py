@@ -35,11 +35,13 @@ SAMPLE_PAYLOAD = {
         "timestamp":            "2026-07-07T00:00:00.000Z",
         "waterLevel":           2.1,
         "waterLevelCurrentMa":  12.4,
-        "temp":                 42.5,
-        "humidity":             67.1,
+        "distanceM":            0.9,
+        "flowRateLpm":          5.0,
+        "flowTotalLiters":      10.0,
+        "rainfallTotalMm":      100.0,
+        "rainfallLastHour":     35.0,
+        "batteryVoltage":      12.06,
         "batteryLevel":         85.0,
-        "flameDetected":        False,
-        "windSpeed":            3.4,
     }]
 }
 
@@ -59,6 +61,10 @@ def main():
     failures = []
 
     # 1) Simulate offline: the send must fail & automatically go into the queue
+    # Simulate loss without ever contacting the URL from a user's .env.
+    api._post_once = lambda *_: (False, None, None, True)
+    from config import settings
+    settings.API_RETRY_DELAY = 0
     ok = api.send_telemetry(SAMPLE_PAYLOAD, db=db)
     if ok:
         failures.append("send_telemetry() should have failed (endpoint is deliberately unreachable)")
