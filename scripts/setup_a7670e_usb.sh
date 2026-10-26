@@ -7,10 +7,11 @@
 #   `ip route add`). That only lasts until the interface disappears: after a
 #   USB replug or a reboot the lease and route are gone and nothing re-runs it.
 #
-#   This script instead creates a persistent NetworkManager profile bound to
-#   the module's MAC address. NetworkManager then brings the link up by itself
-#   every time the module appears (boot, replug, module reset), even if the
-#   interface name changes (eth1 / usb0 / enx...).
+#   This script instead creates a persistent NetworkManager profile that
+#   matches the module's USB network driver (rndis_host / cdc_ether / cdc_ncm).
+#   NetworkManager then brings the link up by itself every time the module
+#   appears (boot, replug, module reset), even if the interface name or MAC
+#   changes (some RNDIS modules generate a new MAC on every enumeration).
 #
 # Run ONCE, while you still have another way in (WiFi SSH or keyboard+monitor):
 #   sudo bash scripts/setup_a7670e_usb.sh
@@ -82,7 +83,7 @@ if nmcli connection show "$CONNECTION_NAME" >/dev/null 2>&1; then
 fi
 
 if ! nmcli connection add type ethernet ifname "*" con-name "$CONNECTION_NAME" \
-        ethernet.mac-address "$MAC" \
+        match.driver "$drv" \
         connection.autoconnect yes \
         connection.autoconnect-priority 100 \
         ipv4.method auto \
@@ -91,7 +92,7 @@ if ! nmcli connection add type ethernet ifname "*" con-name "$CONNECTION_NAME" \
     log FAIL "Could not create the NetworkManager profile $CONNECTION_NAME"
     exit 1
 fi
-log OK "Profile $CONNECTION_NAME created (bound to $MAC, metric $MODEM_METRIC)"
+log OK "Profile $CONNECTION_NAME created (matches driver $drv, metric $MODEM_METRIC)"
 
 # WiFi stays as a lower-priority backup
 nmcli -t -f NAME,TYPE connection show | grep ":802-11-wireless" | cut -d: -f1 | while read -r WIFI_NAME; do
