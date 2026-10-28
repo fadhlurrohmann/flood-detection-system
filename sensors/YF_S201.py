@@ -61,7 +61,7 @@ class YFS201:
                 "sample_duration_sec": elapsed,
             }
 
-    def read_flow_rate(self, duration=3.0):
+    def read_flow_rate(self, duration=5.0):
         """Compatibility helper: wait, then read the average since the last read."""
         if not math.isfinite(duration) or duration <= 0:
             raise ValueError("duration must be finite and positive")
