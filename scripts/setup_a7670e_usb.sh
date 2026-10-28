@@ -76,6 +76,17 @@ ip route del default via 192.168.0.1 dev "$IFACE" 2>/dev/null && log INFO "Remov
 # -----------------------------------------------------------------------------
 # STEP 3: Create the persistent NetworkManager profile
 # -----------------------------------------------------------------------------
+# NetworkManager must know the device, otherwise the profile has nothing to
+# attach to. Give it a few seconds in case the module was just (re)enumerated.
+for i in $(seq 1 10); do
+    nmcli device show "$IFACE" >/dev/null 2>&1 && break
+    sleep 1
+done
+if ! nmcli device show "$IFACE" >/dev/null 2>&1; then
+    log FAIL "NetworkManager does not see $IFACE (the kernel does). Something tells NM to ignore it."
+    log INFO "Check: nmcli device status; grep -rn -i unmanaged /etc/NetworkManager/ /etc/udev/rules.d/ /usr/lib/udev/rules.d/ 2>/dev/null; cat /etc/network/interfaces"
+    exit 1
+fi
 nmcli device set "$IFACE" managed yes
 
 if nmcli connection show "$CONNECTION_NAME" >/dev/null 2>&1; then
