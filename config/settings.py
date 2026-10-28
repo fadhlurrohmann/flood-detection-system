@@ -124,7 +124,7 @@ GPIO_JSN_ECHO = _int("EWF_JSN_ECHO", 18)
 
 #------- YF-S201-------------
 GPIO_YF = _int("EWF_GPIO_YF", 16)
-FLOW_PULSES_PER_LITER = _float("EFWS_FLOW_PULSES_PER_LITER", 450.0)
+FLOW_PULSES_PER_LITER = _float("EFWS_FLOW_PULSES_PER_LITER", 12.0)
 
 # ─── RS485 wind-speed anemometer (Modbus RTU) ───────────────────────────────
 # Verify register address and scale against the specific anemometer datasheet.

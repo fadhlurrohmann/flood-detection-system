@@ -20,7 +20,7 @@ class YFS201:
     def __init__(self, GPIO_YF=None, pulses_per_liter=None):
         # The defualt pin setting is GPIO16.
         self.GPIO_YF = GPIO_YF if GPIO_YF is not None else settings.GPIO_YF
-        #the pulse per liter should be calibrated and then set in the settings.. the default is 450. 
+        #the pulse per liter should be calibrated and then set in the settings.. the default is 450 for 1/2 inch and 12 for 2 inch. 
         self.pulses_per_liter = (
             settings.FLOW_PULSES_PER_LITER if pulses_per_liter is None else pulses_per_liter
         )
@@ -61,7 +61,7 @@ class YFS201:
                 "sample_duration_sec": elapsed,
             }
 
-    def read_flow_rate(self, duration=1.0):
+    def read_flow_rate(self, duration=3.0):
         """Compatibility helper: wait, then read the average since the last read."""
         if not math.isfinite(duration) or duration <= 0:
             raise ValueError("duration must be finite and positive")
