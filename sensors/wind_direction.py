@@ -138,7 +138,6 @@ class WindDirectionSensor:
 # Blok untuk pengetesan langsung (hardware check manual, BUKAN pytest --
 # lihat tests/hardware_checks/ untuk konvensi penamaan check_*.py project ini)
 if __name__ == "__main__":
-
     sensor = WindDirectionSensor()
     print("=== EFWS Wind Direction Test ===")
     print("Putar baling-baling sensor... (Ctrl+C untuk berhenti)\n")
