@@ -14,6 +14,7 @@ Final hardware:
 
 ---
 
+
 ## 1. Raspberry Pi 4 — Pins Used (BCM Numbering)
 
 | Function | GPIO (BCM) | Physical Pin | Notes |
