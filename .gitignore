@@ -20,6 +20,7 @@ __pycache__/
 venv/
 .venv/
 env/
+.venv-wsl
 
 # ── OS files ─────────────────────────────────────────────────
 .DS_Store
