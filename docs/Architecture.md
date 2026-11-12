@@ -1,42 +1,55 @@
-# Flood runtime and API contract
+# EFWS Architecture Overview
 
-The runtime loads pressure, rainfall, ultrasonic distance, water flow, battery voltage, BME280, wind speed, and wind direction. Soil, flame, and a separate buzzer are not loaded. A failed driver is replaced with a null sensor and its error is logged.
+```
+                         ┌─────────────────────────── ┐
+                         │   Solar 80-100W + LiFePO4  │
+                         │   + Voltage Sensor Module  │
+                         └─────────────┬───────────── ┘
+                                       5V/12V/loop
+                                        │
+┌──────────────┐   I2C   ┌─────────────▼───────────── ┐   GPIO O  ┌────────────┐
+│              │◄───────►│                            │──────────►│ Relay 5V   │──►12V Siren
+│ BME280
+| SEN0460 (AQI)│         |      Raspberry Pi 4        │           └────────────┘
+├──────────────┤  SPI    │      (main.py orchestrator)│
+│              │◄───────►│                            │   GPIO I  ┌────────────┐
+│  MCP3008 ADC │         │                            │◄──────────│ JSN-SR04T  │
+│ (Pressure/   │         │                            │           │ YF-S201    │
+│              │         │                            │           │  (digital) │
+│  Battery)    │         │                            │           └────────────┘
+└──────────────┘         │                            │
+┌──────────────┐  USB    │                            │  USB/UART  ┌─────────────┐
+│ RS485 (s/d   │◄───────►│                            │───────────►│ A7670E /    │──► 4G Network
+│ Anemometer   │         │                            │            │ SIM7600     │
+└──────────────┘         └─────────────┬──────────────┘            │ (one only) │
+                                        │                          └─────────────┘
+                          ┌─────────────┴──────────────┐
+                          │ 1) Save to SQLite FIRST     │
+                          │ 2) Evaluate locally (siren) │
+                          │ 3) Try sending to REST API  │
+                          │ 4) Failure → offline queue  │
+                          └─────────────┬──────────────┘
+                                        ▼
+                    EWS_API_URL/sensors/telemetry (backend)
+                    ── backend stores the alarm level and
+                       the "official" threshold evaluation
+```
 
-## Runtime
+## Data flow (important)
 
-1. The sampling loop reads all eight sensors, validates measurements, evaluates local alarms, and logs every cycle. Pressure loop faults invalidate pressure depth. Missing ultrasonic echoes never reuse an old sample.
-2. Pressure depth and calibrated ultrasonic depth trigger at or above the water threshold. Without a mounting-height calibration, the raw-distance threshold triggers at or below its limit. Configured pressure, temperature, humidity, and wind thresholds are evaluated too; flow is alarmed only if a flow threshold is configured. Local alarms wait for the required consecutive dangerous readings and silence on a normal cycle.
-3. Hourly rainfall drives the rainfall alarm. The API's rainfall value is a different quantity: rain since the preceding durably queued telemetry report.
-4. First/routine/emergency reporting queues location, telemetry, and heartbeat together in SQLite. A single upload worker owns the HTTP session, preserving offline request bodies and queue order. GPS and retention use separate workers; neither GPS nor HTTP delays local alarm evaluation.
-5. Remote nonnegative finite numeric thresholds override local values. Null or malformed fields fall back locally. The newer pressureDepthDangerThreshold name is accepted alongside the legacy waterDangerThreshold.
-6. The rainfall baseline and queued bundle commit in the same transaction. Payload construction alone never advances the baseline. Restarts retain it; failed transactions roll back both requests and state. The first report without a baseline sends zero, missing rainfall sends null, and a reset cumulative counter produces zero for that interval.
-7. Network errors, HTTP 408/429, and 5xx responses remain pending. Permanent HTTP rejection or malformed queue JSON marks that row discarded. A crash after server acceptance but before local confirmation can replay a request: delivery is at least once.
-8. Ctrl+C or SIGTERM silences/releases the alarm and sensors, wakes workers, and closes resources. Already-running GPS/HTTP calls have bounded timeouts; a daemon worker may still be returning during process exit.
-
-## Payload contract retained from main
-
-Each request carries deviceId and deviceToken. The telemetry value is a list of records with exactly these keys:
-
-| Key | Meaning |
-|---|---|
-| timestamp | Sampling timestamp in UTC, ending in Z |
-| bme_temp_c | BME280 temperature in degrees Celsius |
-| bme_humidity_pct | BME280 relative humidity percentage |
-| bme_pressure_hpa | BME280 atmospheric pressure in hPa |
-| sps_depth_m | Pressure-sensor depth in metres; never replaced by ultrasonic depth |
-| sps_pressure_bar | Pressure-sensor pressure in bar |
-| wind_speed_ms | Wind speed in metres per second |
-| wind_dir | Compass abbreviation such as N or NE |
-| flow_lpm | Average litres per minute since the previous sample |
-| distance_m | Fresh ultrasonic distance in metres |
-| battery_pct | Linear voltage-based percentage, clamped to 0-100 |
-| rainfall | Millimetres since the preceding durably queued report, from the cumulative counter |
-
-No camelCase telemetry aliases or extra voltage/hourly-rain/flow-total fields are added to the wire contract. Those measurements remain in local SQLite. Faults produce JSON null rather than fabricated zero measurements.
-
-Location retains latitude and longitude. Heartbeat retains batteryLevel. Command ACK retains commandId, status, and error. Endpoints remain /sensors/location, /sensors/telemetry, /sensors/heartbeat, and /sensors/commands/ack under EFWS_API_URL.
-
-The working sensor-removal runtime's bundled report timing is retained; main's broken independent publisher implementation is not reintroduced. The normal default interval is 360 seconds, with immediate reports on dangerous cycles.
+1. **Read** all sensors every `EFWS_READ_INTERVAL` seconds.
+2. **Save to SQLite first** (`sensor_readings`, the local source of truth) —
+   data is never lost even when the signal or connection is down.
+3. **Evaluate locally** against `config/thresholds.json` — this is used ONLY
+   to activate the field siren in actual time. The result is **not** stored in
+   the database or sent to the API; the backend owns the official alarm level
+   and threshold evaluation.
+4. **Try to send** the payload to `EFWS_API_URL/sensors/telemetry`. If it
+   succeeds, the cycle is complete. If it fails, the payload automatically
+   enters the offline queue (`api_queue`) unchanged.
+5. While offline, the publisher **does not** spam retries. It checks
+   connectivity every `EFWS_CONNECTIVITY_CHECK_SEC` (default 120 seconds),
+   then flushes the entire queue in FIFO order when back online.
 
 ## Database compatibility
 
