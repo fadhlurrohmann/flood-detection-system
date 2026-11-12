@@ -86,13 +86,14 @@ class DBManager:
             "rainfall_last_hour_mm", "battery_voltage", "battery_percent",
             "bme_temperature_c", "bme_humidity_pct", "bme_pressure_hpa", "wind_speed_ms",
             "sps_current_ma", "sps_depth_m", "sps_pressure_bar", "battery_pct", "rainfall_delta_mm",
+            "aqi_pm1", "aqi_pm25", "aqi_pm10", "aqi",
         ):
             if name not in columns:
                 cur.execute(f"ALTER TABLE sensor_readings ADD COLUMN {name} REAL")
         if "sensor_errors" not in columns:
             cur.execute("ALTER TABLE sensor_readings ADD COLUMN sensor_errors TEXT")
         for name, column_type in {"water_fault_open": "INTEGER", "sps_fault_open_loop": "INTEGER",
-                                  "wind_direction": "TEXT"}.items():
+                                  "wind_direction": "TEXT", "aqi_provisional": "INTEGER"}.items():
             if name not in columns:
                 cur.execute(f"ALTER TABLE sensor_readings ADD COLUMN {name} {column_type}")
 
@@ -122,6 +123,7 @@ class DBManager:
         bme = data.get("bme", {})
         wind = data.get("wind", {})
         direction = data.get("wind_dir", {})
+        air = data.get("aqi", {})
         distance = data.get("distance", {}).get("distance_m")
         height = settings.ULTRASONIC_MOUNT_HEIGHT_M
         ultrasonic_depth = round(height - distance, 3) if (
@@ -153,6 +155,9 @@ class DBManager:
             "sps_pressure_bar": pressure.get("pressure_bar"), "sps_fault_open_loop": fault,
             "battery_pct": battery.get("percent"),
             "rainfall_delta_mm": api_payload["telemetry"][0].get("rainfall"),
+            "aqi_pm1": air.get("pm1"), "aqi_pm25": air.get("pm25"),
+            "aqi_pm10": air.get("pm10"), "aqi": air.get("aqi"),
+            "aqi_provisional": int(air["provisional"]) if air.get("provisional") is not None else None,
             "full_payload": json.dumps(api_payload, allow_nan=False),
             "sensor_errors": json.dumps(errors),
         }
@@ -249,7 +254,8 @@ class DBManager:
                    rainfall_last_hour_mm, battery_voltage, sensor_errors,
                    bme_temperature_c, bme_humidity_pct, bme_pressure_hpa,
                    wind_speed_ms, wind_direction, sps_current_ma, sps_depth_m,
-                   sps_pressure_bar, sps_fault_open_loop, battery_pct, rainfall_delta_mm
+                   sps_pressure_bar, sps_fault_open_loop, battery_pct, rainfall_delta_mm,
+                   aqi_pm1, aqi_pm25, aqi_pm10, aqi, aqi_provisional
             FROM   sensor_readings
             ORDER  BY id DESC LIMIT ?
         """, (limit,))

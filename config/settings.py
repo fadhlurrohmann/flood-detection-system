@@ -95,6 +95,12 @@ RAINFALL_I2C_ADDRESS = int(_opt("EFWS_RAINFALL_ADDR", "0x1D"), 0)
 # Read interval (seconds)
 RAINFALL_READ_INTERVAL = 2
 
+# SEN0460 particulate sensor; AQI uses the existing Indonesian ISPU calculation.
+AQI_I2C_ADDRESS = int(_opt("EFWS_AQI_ADDR", "0x19"), 0)
+AQI_WINDOW_SEC = _float("EFWS_AQI_WINDOW_SEC", 24 * 3600)
+AQI_WARMUP_SEC = _float("EFWS_AQI_WARMUP_SEC", 30.0)
+AQI_WAKE = _bool("EFWS_AQI_WAKE", False)
+
 # ─── Battery — DC 0-25V Voltage Sensor Module ─────────────────────────────────
 # V_battery = raw/1023 × MCP3008_VREF × BATTERY_DIVIDER_RATIO. Calibration: ratio = battery V (multimeter) / V at pin S.
 BATTERY_DIVIDER_RATIO = _float("EFWS_BATTERY_DIVIDER_RATIO", 5.0)  # 30k/7.5k module

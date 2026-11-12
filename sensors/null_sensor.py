@@ -31,6 +31,7 @@ SENSOR_SCHEMAS = {
     "bme": {"temperature_c": None, "humidity_percent": None, "pressure_hpa": None},
     "wind": {"speed_ms": None},
     "wind_dir": {"direction_code": None, "direction_abbr": None, "direction_name": None},
+    "aqi": {"pm1": None, "pm25": None, "pm10": None, "aqi": None, "provisional": None},
 }
 
 

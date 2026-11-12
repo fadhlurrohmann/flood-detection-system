@@ -26,6 +26,8 @@ Power MCP3008 VDD and VREF from 3.3 V; connect AGND and DGND to common ground. S
 
 ## Rainfall and ultrasonic/flow
 
+SEN0460 air quality uses the same I2C bus at default address 0x19, distinct from rainfall (0x1D) and BME280 (0x76). The existing sensor notes connect D to SDA (BCM2/physical pin 3), C to SCL (BCM3/pin 5), ground to pin 6, and supply to the 3.3 V rail (pin 1). Confirm the installed board's supply and signal requirements. Configure the address with `EFWS_AQI_ADDR`; the runtime uses the existing `smbus2` dependency.
+
 SEN0575 uses the existing project's 3.3 V I2C connection, bus 1, address 0x1D, SDA BCM2 and SCL BCM3. Verify your board's supply specification. The runtime validates PID/VID and selects a one-hour window before reading. `i2cdetect -y 1` should show `1d`.
 
 JSN-SR04T must be in trigger/echo mode for this driver. Supply it according to the exact board specification and reduce any 5 V ECHO output before BCM18. Set `EFWS_ULTRASONIC_MOUNT_HEIGHT_M` only after measuring its height above the water-depth zero datum. No echo produces null, never a synthetic flood distance.

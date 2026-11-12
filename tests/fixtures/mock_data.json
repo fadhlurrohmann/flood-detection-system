@@ -15,7 +15,12 @@
         "flow_lpm": 5,
         "distance_m": 2.8,
         "battery_pct": 85,
-        "rainfall": 0.5
+        "rainfall": 0.5,
+        "pm1": null,
+        "pm25": null,
+        "pm10": null,
+        "aqi": null,
+        "aqi_provisional": null
       }
     ]
   },
@@ -35,7 +40,12 @@
         "flow_lpm": 5,
         "distance_m": 2.8,
         "battery_pct": 85,
-        "rainfall": 0.5
+        "rainfall": 0.5,
+        "pm1": null,
+        "pm25": null,
+        "pm10": null,
+        "aqi": null,
+        "aqi_provisional": null
       }
     ]
   },
@@ -55,7 +65,12 @@
         "flow_lpm": 5,
         "distance_m": 2.8,
         "battery_pct": 85,
-        "rainfall": 0.5
+        "rainfall": 0.5,
+        "pm1": null,
+        "pm25": null,
+        "pm10": null,
+        "aqi": null,
+        "aqi_provisional": null
       }
     ]
   },
@@ -75,7 +90,12 @@
         "flow_lpm": 5,
         "distance_m": 2.8,
         "battery_pct": 85,
-        "rainfall": 0.5
+        "rainfall": 0.5,
+        "pm1": null,
+        "pm25": null,
+        "pm10": null,
+        "aqi": null,
+        "aqi_provisional": null
       }
     ]
   },
@@ -95,7 +115,12 @@
         "flow_lpm": 5,
         "distance_m": 2.8,
         "battery_pct": 85,
-        "rainfall": 0.5
+        "rainfall": 0.5,
+        "pm1": null,
+        "pm25": null,
+        "pm10": null,
+        "aqi": null,
+        "aqi_provisional": null
       }
     ]
   },
@@ -115,7 +140,12 @@
         "flow_lpm": 5,
         "distance_m": 2.8,
         "battery_pct": 85,
-        "rainfall": 0.5
+        "rainfall": 0.5,
+        "pm1": null,
+        "pm25": null,
+        "pm10": null,
+        "aqi": null,
+        "aqi_provisional": null
       }
     ]
   },
@@ -135,7 +165,12 @@
         "flow_lpm": 5,
         "distance_m": 2.8,
         "battery_pct": 85,
-        "rainfall": 0.5
+        "rainfall": 0.5,
+        "pm1": null,
+        "pm25": null,
+        "pm10": null,
+        "aqi": null,
+        "aqi_provisional": null
       }
     ]
   },
@@ -155,7 +190,12 @@
         "flow_lpm": 5,
         "distance_m": 2.8,
         "battery_pct": 85,
-        "rainfall": 0.5
+        "rainfall": 0.5,
+        "pm1": null,
+        "pm25": null,
+        "pm10": null,
+        "aqi": null,
+        "aqi_provisional": null
       }
     ]
   },
@@ -175,7 +215,12 @@
         "flow_lpm": 5,
         "distance_m": 2.55,
         "battery_pct": 85,
-        "rainfall": 20
+        "rainfall": 20,
+        "pm1": null,
+        "pm25": null,
+        "pm10": null,
+        "aqi": null,
+        "aqi_provisional": null
       }
     ]
   },
@@ -195,7 +240,12 @@
         "flow_lpm": 5,
         "distance_m": 2.55,
         "battery_pct": 85,
-        "rainfall": 20
+        "rainfall": 20,
+        "pm1": null,
+        "pm25": null,
+        "pm10": null,
+        "aqi": null,
+        "aqi_provisional": null
       }
     ]
   },
@@ -215,7 +265,12 @@
         "flow_lpm": 5,
         "distance_m": 2.55,
         "battery_pct": 85,
-        "rainfall": 20
+        "rainfall": 20,
+        "pm1": null,
+        "pm25": null,
+        "pm10": null,
+        "aqi": null,
+        "aqi_provisional": null
       }
     ]
   },
@@ -235,7 +290,12 @@
         "flow_lpm": 5,
         "distance_m": 2.55,
         "battery_pct": 85,
-        "rainfall": 20
+        "rainfall": 20,
+        "pm1": null,
+        "pm25": null,
+        "pm10": null,
+        "aqi": null,
+        "aqi_provisional": null
       }
     ]
   },
@@ -255,7 +315,12 @@
         "flow_lpm": 5,
         "distance_m": 2,
         "battery_pct": 85,
-        "rainfall": 35
+        "rainfall": 35,
+        "pm1": null,
+        "pm25": null,
+        "pm10": null,
+        "aqi": null,
+        "aqi_provisional": null
       }
     ]
   },
@@ -275,7 +340,12 @@
         "flow_lpm": 5,
         "distance_m": 2,
         "battery_pct": 85,
-        "rainfall": 35
+        "rainfall": 35,
+        "pm1": null,
+        "pm25": null,
+        "pm10": null,
+        "aqi": null,
+        "aqi_provisional": null
       }
     ]
   },
@@ -295,7 +365,12 @@
         "flow_lpm": 5,
         "distance_m": 2,
         "battery_pct": 85,
-        "rainfall": 35
+        "rainfall": 35,
+        "pm1": null,
+        "pm25": null,
+        "pm10": null,
+        "aqi": null,
+        "aqi_provisional": null
       }
     ]
   }

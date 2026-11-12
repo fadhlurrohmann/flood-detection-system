@@ -44,6 +44,11 @@ SAMPLE_PAYLOAD = {
         "distance_m": 0.9,
         "battery_pct": 85.0,
         "rainfall": 35.0,
+        "pm1": 6,
+        "pm25": 8,
+        "pm10": 11,
+        "aqi": 26,
+        "aqi_provisional": True,
     }]
 }
 

@@ -22,6 +22,7 @@ Usage (on the Pi):
 Automated checks: python3 tests/test_aqi.py   (add --live to also read the real sensor)
 """
 import argparse
+import math
 import sys
 import time
 from collections import deque
@@ -95,7 +96,7 @@ def category(v):
     if v <= 100: return "Sedang (Moderate)"
     if v <= 200: return "Tidak Sehat (Unhealthy)"
     if v <= 300: return "Sangat Tidak Sehat (Very Unhealthy)"
-    return "Berbahaya (ur fucked. get inside)"
+    return "Berbahaya (Hazardous)"
 
 
 def ispu(pm25_avg, pm10_avg):
@@ -111,6 +112,8 @@ class WindowMean:
     """Mean over the last `window_s` seconds, stored as ~1440 bucket averages."""
 
     def __init__(self, window_s):
+        if not math.isfinite(window_s) or window_s <= 0:
+            raise ValueError("Averaging window must be finite and positive")
         self.window_s = window_s
         self.bucket_s = max(1.0, window_s / 1440)
         self.buckets = deque()                  # (bucket start time, bucket mean)
@@ -138,6 +141,60 @@ class WindowMean:
     def coverage(self, now=None):
         now = time.time() if now is None else now
         return min(1.0, (now - self.started) / self.window_s)
+
+
+class AQISensor:
+    """Runtime wrapper for SEN0460 PM readings and the existing rolling ISPU.
+
+    Warm-up is checked on read instead of sleeping during initialization, so
+    other sensors and local flood alarms can keep running. Averages reset on
+    process restart. The index uses available samples until the window elapses.
+    """
+
+    def __init__(self, bus=None, address=None, window_s=None, warmup_s=None, wake=None):
+        from config import settings
+
+        self.bus_num = settings.I2C_BUS if bus is None else bus
+        self.address = settings.AQI_I2C_ADDRESS if address is None else address
+        self.window_s = settings.AQI_WINDOW_SEC if window_s is None else window_s
+        warmup_s = settings.AQI_WARMUP_SEC if warmup_s is None else warmup_s
+        wake = settings.AQI_WAKE if wake is None else wake
+        if not math.isfinite(self.window_s) or self.window_s <= 0:
+            raise ValueError("AQI averaging window must be finite and positive")
+        if not math.isfinite(warmup_s) or warmup_s < 0:
+            raise ValueError("AQI warm-up must be finite and nonnegative")
+        if SMBus is None:
+            raise RuntimeError("smbus2 is required for the SEN0460 AQI sensor")
+        self.bus = SMBus(self.bus_num)
+        try:
+            self.version = read_reg(self.bus, self.address, REG_VERSION, 1)[0]
+            if wake:
+                self.bus.write_i2c_block_data(self.address, REG_POWER, [0x02])
+        except Exception:
+            self.bus.close()
+            raise
+        self._ready_at = time.monotonic() + warmup_s
+        self._avg25 = WindowMean(self.window_s)
+        self._avg10 = WindowMean(self.window_s)
+        self._started = None
+
+    def read(self):
+        if time.monotonic() < self._ready_at:
+            raise RuntimeError("SEN0460 AQI sensor is warming up")
+        pm = read_pm(self.bus, self.address)
+        if any(not isinstance(value, (int, float)) or isinstance(value, bool)
+               or not math.isfinite(value) or not 0 <= value < 0x8000 for value in pm.values()):
+            raise ValueError("SEN0460 returned invalid particulate measurements")
+        self._avg25.add(pm["pm25"])
+        self._avg10.add(pm["pm10"])
+        now = time.monotonic()
+        if self._started is None:
+            self._started = now
+        value, _, _ = ispu(self._avg25.mean(), self._avg10.mean())
+        return {**pm, "aqi": value, "provisional": now - self._started < self.window_s}
+
+    def close(self):
+        self.bus.close()
 
 
 def main():

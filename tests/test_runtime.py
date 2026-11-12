@@ -51,6 +51,7 @@ class RuntimeTests(unittest.TestCase):
             "bme": {"temperature_c": 25, "humidity_percent": 65, "pressure_hpa": 1012},
             "wind": {"speed_ms": 3.2},
             "wind_dir": {"direction_code": 2, "direction_abbr": "NE"},
+            "aqi": {"pm1": 6, "pm25": 8, "pm10": 11, "aqi": 26, "provisional": True},
             "_timestamp": "2026-10-21T00:00:00.000Z",
         }
 
@@ -59,7 +60,7 @@ class RuntimeTests(unittest.TestCase):
                             if not name.startswith("_")}
 
     def test_exact_sensor_set_in_mock_mode(self):
-        self.assertEqual(set(self.app.sensors), {"pressure", "distance", "flow", "battery", "rain", "bme", "wind", "wind_dir"})
+        self.assertEqual(set(self.app.sensors), {"pressure", "distance", "flow", "battery", "rain", "bme", "wind", "wind_dir", "aqi"})
         data = self.app._read_all()
         self.assertTrue(all(not v.get("error") for v in data.values() if isinstance(v, dict)))
         self.assertIsInstance(data["distance"]["distance_m"], float)
@@ -106,7 +107,7 @@ class RuntimeTests(unittest.TestCase):
 
     def test_sensor_failures_are_null_and_do_not_crash(self):
         self.app.sensors = {name: Mock(read=Mock(side_effect=OSError("unplugged")))
-                            for name in ("pressure", "rain", "distance", "flow", "battery", "bme", "wind", "wind_dir")}
+                            for name in ("pressure", "rain", "distance", "flow", "battery", "bme", "wind", "wind_dir", "aqi")}
         data = self.app._read_all()
         self.assertFalse(self.app._evaluate(data)[0])
         payload = self.app._build_telemetry_payload(data)["telemetry"][0]
@@ -124,6 +125,20 @@ class RuntimeTests(unittest.TestCase):
         self.assertFalse(self.app._evaluate(data)[0])
         json.dumps(self.app._build_telemetry_payload(data), allow_nan=False)
 
+    def test_aqi_failure_keeps_other_sensors_logging_and_uploading(self):
+        self.set_readings(self.data)
+        self.app.sensors["aqi"].read.side_effect = OSError("AQI disconnected")
+        data = self.app.run_cycle()
+        row = self.app._build_telemetry_payload(data)["telemetry"][0]
+        for key in ("pm1", "pm25", "pm10", "aqi", "aqi_provisional"):
+            self.assertIsNone(row[key])
+        self.assertEqual(row["bme_temp_c"], 25)
+        self.assertEqual(row["flow_lpm"], 5.5)
+        saved = self.app.db.recent_readings()[0]
+        self.assertIsNone(saved["aqi"])
+        self.assertIn("AQI disconnected", json.loads(saved["sensor_errors"])["aqi"])
+        self.assertEqual(self.app.db.count_pending_queue(), 3)
+
     def test_payload_contains_all_current_sensors_and_utc_timestamp(self):
         payload = self.app._build_telemetry_payload(self.data)
         row = payload["telemetry"][0]
@@ -135,9 +150,11 @@ class RuntimeTests(unittest.TestCase):
         self.assertEqual(row["bme_temp_c"], 25)
         self.assertEqual(row["wind_speed_ms"], 3.2)
         self.assertEqual(row["wind_dir"], "NE")
+        self.assertEqual((row["pm1"], row["pm25"], row["pm10"], row["aqi"]), (6, 8, 11, 26))
+        self.assertIs(row["aqi_provisional"], True)
         self.assertEqual(set(row), {"timestamp", "bme_temp_c", "bme_humidity_pct", "bme_pressure_hpa",
             "sps_depth_m", "sps_pressure_bar", "wind_speed_ms", "wind_dir", "flow_lpm",
-            "distance_m", "battery_pct", "rainfall"})
+            "distance_m", "battery_pct", "rainfall", "pm1", "pm25", "pm10", "aqi", "aqi_provisional"})
         self.assertEqual(self.app._build_heartbeat_payload(self.data)["batteryLevel"], 83.3)
         self.assertTrue(set(row).isdisjoint({"soilMoisture", "temp", "humidity", "windSpeed", "flameDetected"}))
 
@@ -255,12 +272,15 @@ class RuntimeTests(unittest.TestCase):
         db.log_reading(self.data, payload)
         rows = db.conn.execute("SELECT * FROM sensor_readings ORDER BY id").fetchall()
         self.assertEqual(rows[0]["bme_temperature_c"], 24)
+        self.assertIsNone(rows[0]["aqi"])
         self.assertEqual(rows[1]["bme_temperature_c"], 25)
         self.assertEqual(rows[1]["wind_speed_ms"], 3.2)
         self.assertEqual(rows[1]["wind_direction"], "NE")
         self.assertEqual(rows[1]["sps_depth_m"], 0.2)
         self.assertEqual(rows[1]["battery_pct"], 83.3)
         self.assertEqual(rows[1]["rainfall_delta_mm"], 0)
+        self.assertEqual((rows[1]["aqi_pm1"], rows[1]["aqi_pm25"], rows[1]["aqi_pm10"], rows[1]["aqi"]), (6, 8, 11, 26))
+        self.assertEqual(rows[1]["aqi_provisional"], 1)
         self.assertEqual(json.loads(rows[1]["full_payload"]), payload)
 
     def test_main_depth_threshold_alias_and_environmental_thresholds(self):
@@ -422,6 +442,7 @@ class RuntimeTests(unittest.TestCase):
                 self.assertEqual([p for p, _ in received[:3]],
                                  ["/sensors/location", "/sensors/telemetry", "/sensors/heartbeat"])
                 self.assertEqual(received[1][1]["telemetry"][0]["battery_pct"], 83.3)
+                self.assertEqual(received[1][1]["telemetry"][0]["aqi"], 26)
             finally:
                 self.app._stop_flag.set()
                 self.app._upload_event.set()

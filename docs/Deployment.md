@@ -1,6 +1,6 @@
 # Run the current flood system on a Raspberry Pi
 
-The current runtime loads pressure, rainfall, ultrasonic distance, water flow, voltage, BME280, wind speed, and wind direction. Commands below run on the Pi from this repository root; adjust the path for your checkout.
+The current runtime loads pressure, rainfall, ultrasonic distance, water flow, voltage, BME280, wind speed, wind direction, and SEN0460 air quality. Commands below run on the Pi from this repository root; adjust the path for your checkout.
 
 ## Prepare interfaces and Python
 
@@ -21,7 +21,7 @@ After logging back in:
 cd ~/Documents/flood-detection-system
 ls /dev/spidev0.0
 i2cdetect -y 1
-# Expected rain address: 1d; BME280 normally uses 76 or 77.
+# Expected: rain 1d, SEN0460 AQI 19, BME280 76 or 77.
 python3 -m venv venv
 source venv/bin/activate
 python3 -m pip install -r requirements.txt
@@ -40,11 +40,15 @@ Edit `config/thresholds.json` for site-appropriate high-water, pressure, distanc
 
 ```bash
 python3 -m unittest discover -s tests -p test_runtime.py -v
+python3 -m unittest discover -s tests -p test_aqi_runtime.py -v
+python3 tests/test_aqi.py
 python3 tests/test_all_sensors.py
 EFWS_RUN_MODE=hardware python3 main.py
 ```
 
-The hardware check reads all eight sensors. Pressure loop faults, missing ultrasonic echoes, and driver errors fail the check. Zero flow when stationary is valid. Verify pressure, voltage, flow, and serial-sensor calibration against independent measurements or the sensor datasheets.
+The hardware check reads all nine sensors and waits for AQI warm-up before its single reading. Pressure loop faults, missing ultrasonic echoes, and driver errors fail the check. Zero flow when stationary is valid. Verify pressure, voltage, flow, and serial-sensor calibration against independent measurements or the sensor datasheets.
+
+SEN0460 shares the I2C bus at address 0x19 by default (`EFWS_AQI_ADDR`). In normal runtime its default 30-second warm-up reports null while other sensors continue; no sleep is added to the main loop. The available PM2.5/PM10 readings are averaged using the existing ISPU-style calculation over `EFWS_AQI_WINDOW_SEC` (default 86400). The average resets on restart. `aqi_provisional` is true until the window elapses after the first valid sample; it does not measure sampling completeness. `EFWS_AQI_WAKE=true` enables the existing optional wake command. The dedicated live check remains `python3 tests/test_aqi.py --live`.
 
 In runtime a missing sensor is reported as null and an error; the remaining sensors keep running. Check the logs for errors rather than assuming a running process proves healthy hardware. Sensors that fail startup initialization remain unavailable until restart after repair. Stop with Ctrl+C; the siren is silenced and hardware resources are released.
 

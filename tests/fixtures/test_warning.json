@@ -14,7 +14,12 @@
       "flow_lpm": 5,
       "distance_m": 2.55,
       "battery_pct": 85,
-      "rainfall": 20
+      "rainfall": 20,
+      "pm1": null,
+      "pm25": null,
+      "pm10": null,
+      "aqi": null,
+      "aqi_provisional": null
     }
   ]
 }

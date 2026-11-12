@@ -39,6 +39,7 @@ def _load_sensors_and_alarm():
             MockBME280,
             MockAnemometer,
             MockWindDirection,
+            MockAQI,
         )
         return {
             "pressure": MockPressureWater(), "rain": MockRainfall(),
@@ -46,6 +47,7 @@ def _load_sensors_and_alarm():
             "battery": MockBattery(),
             "bme": MockBME280(), "wind": MockAnemometer(),
             "wind_dir": MockWindDirection(),
+            "aqi": MockAQI(),
         }, MockAlarmController()
 
     # Import each driver independently: one missing library must not disable
@@ -60,6 +62,7 @@ def _load_sensors_and_alarm():
         "bme": ("sensors.bme280_sensor", "BME280Sensor"),
         "wind": ("sensors.wind_speed", "WindSpeedSensor"),
         "wind_dir": ("sensors.wind_direction", "WindDirectionSensor"),
+        "aqi": ("sensors.aqi", "AQISensor"),
     }
     sensors = {}
     for name, (module, class_name) in factories.items():
@@ -251,6 +254,7 @@ class EFWS:
         bme = data.get("bme", {})
         wind = data.get("wind", {})
         wind_dir = data.get("wind_dir", {})
+        air = data.get("aqi", {})
         return {**self._identity(), "telemetry": [{
             "timestamp": data["_timestamp"],
             "bme_temp_c": bme.get("temperature_c"),
@@ -264,6 +268,11 @@ class EFWS:
             "distance_m": data.get("distance", {}).get("distance_m"),
             "battery_pct": battery.get("percent"),
             "rainfall": self._rainfall_delta(rain.get("rainfall_total_mm")),
+            "pm1": air.get("pm1"),
+            "pm25": air.get("pm25"),
+            "pm10": air.get("pm10"),
+            "aqi": air.get("aqi"),
+            "aqi_provisional": air.get("provisional"),
         }]}
 
     def _rainfall_delta(self, total_mm):
@@ -346,10 +355,10 @@ class EFWS:
         if triggered or self._last_routine_send is None or now - self._last_routine_send >= settings.ROUTINE_SEND_INTERVAL_SEC:
             self._send_bundle(data, "emergency" if triggered else "routine", telemetry)
             self._last_routine_send = now
-        logger.info("READ depth=%s m distance=%s m flow=%s L/min rain_1h=%s mm battery=%s V | triggers=%s",
+        logger.info("READ depth=%s m distance=%s m flow=%s L/min rain_1h=%s mm battery=%s V aqi=%s | triggers=%s",
                     telemetry["telemetry"][0]["sps_depth_m"], data["distance"].get("distance_m"),
                     data["flow"].get("flow_lpm"), data["rain"].get("rainfall_last_hour_mm"),
-                    data["battery"].get("voltage"), reasons)
+                    data["battery"].get("voltage"), data["aqi"].get("aqi"), reasons)
         return data
 
     def run(self):

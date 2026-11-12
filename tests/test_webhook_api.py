@@ -42,6 +42,11 @@ sample = {
         "distance_m": 2.8,
         "battery_pct": 85.0,
         "rainfall": 0.0,
+        "pm1": 6,
+        "pm25": 8,
+        "pm10": 11,
+        "aqi": 26,
+        "aqi_provisional": True,
     }]
 }
 

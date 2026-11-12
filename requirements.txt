@@ -3,7 +3,7 @@ requests>=2.31.0          # HTTP REST API publisher
 python-dotenv>=1.0.0      # load the configuration from the .env file
 
 # ─── Hardware sensors (only when RUN_MODE=hardware) ───────────
-smbus2>=0.4.2             # I2C rainfall (SEN0575)
+smbus2>=0.4.2             # I2C rainfall (SEN0575) and particulate sensor (SEN0460)
 RPi.bme280>=0.2.4         # BME280 temperature, humidity, pressure
 minimalmodbus>=2.1.0      # RS485 wind-speed anemometer
 spidev>=3.6               # SPI bus for the MCP3008 (pressure, battery)

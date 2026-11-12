@@ -130,3 +130,25 @@ class MockAnemometer(_MockBase):
 class MockWindDirection(_MockBase):
     def read(self):
         return {"direction_code": 2, "direction_abbr": "NE", "direction_name": "Northeast", "_mock": True}
+
+
+class MockAQI(_MockBase):
+    """Synthetic particulate readings using the same ISPU and averaging as hardware."""
+
+    def __init__(self):
+        from sensors.aqi import WindowMean
+
+        self._avg25 = WindowMean(settings.AQI_WINDOW_SEC)
+        self._avg10 = WindowMean(settings.AQI_WINDOW_SEC)
+        self._started = time.monotonic()
+
+    def read(self):
+        from sensors.aqi import ispu
+
+        pm25 = _jitter({"normal": 8.0, "warning": 35.0, "critical": 100.0}[self._scenario()])
+        pm1, pm10 = round(pm25 * 0.6, 3), round(pm25 * 1.5, 3)
+        self._avg25.add(pm25)
+        self._avg10.add(pm10)
+        value, _, _ = ispu(self._avg25.mean(), self._avg10.mean())
+        return {"pm1": pm1, "pm25": pm25, "pm10": pm10, "aqi": value,
+                "provisional": time.monotonic() - self._started < settings.AQI_WINDOW_SEC, "_mock": True}

@@ -3,6 +3,7 @@
 import importlib
 import os
 import sys
+import time
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -16,6 +17,7 @@ TESTS = [
     ("BME280", "sensors.bme280_sensor", "BME280Sensor", "read"),
     ("Wind speed", "sensors.wind_speed", "WindSpeedSensor", "read"),
     ("Wind direction", "sensors.wind_direction", "WindDirectionSensor", "read"),
+    ("Air quality", "sensors.aqi", "AQISensor", "read"),
 ]
 
 
@@ -30,6 +32,10 @@ def main():
         try:
             module = importlib.import_module(module_name)
             sensor = getattr(module, class_name)()
+            if class_name == "AQISensor":
+                from config import settings
+                print(f"  Waiting {settings.AQI_WARMUP_SEC:g}s for AQI warm-up...")
+                time.sleep(settings.AQI_WARMUP_SEC)
             reading = getattr(sensor, read_method)()
             if reading is None:
                 raise RuntimeError("No measurement received")

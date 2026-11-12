@@ -53,6 +53,14 @@
 
 ## Database compatibility
 
+### AQI integration
+
+`AQISensor` wraps the existing SEN0460 I2C helpers and rolling ISPU calculation in `sensors/aqi.py`. The main factory loads it as `aqi` in hardware mode and `MockAQI` in mock mode. Warm-up and failed/invalid readings become null without stopping the other drivers. AQI does not change the local siren rules.
+
+Every telemetry record now also includes `pm1`, `pm25`, `pm10` (ug/m3), `aqi` (the existing ISPU-style index), and `aqi_provisional` (boolean, null when unavailable). These extend the existing payload without renaming its fields. The index uses rolling PM2.5/PM10 samples, not PM1 or only the latest measurement. The default window is 24 hours in memory and restarts with the process. The provisional flag describes elapsed window time from the first valid sample; it is not a guarantee of continuous samples or regulatory validation.
+
+SQLite additively gains `aqi_pm1`, `aqi_pm25`, `aqi_pm10`, `aqi`, and `aqi_provisional`. Historical rows remain unchanged with null in these new columns. Full payload snapshots and offline queue entries retain the same AQI values that were prepared for transmission. The backend must accept the five additional telemetry fields.
+
 Startup additively upgrades either branch's sensor_readings table without deleting historical columns or rows. Both older water_* columns and main's sps_* columns are maintained. BME, wind, voltage, flow totals, hourly/cumulative rain, errors, and exact telemetry snapshots are stored. location_log preserves position reporting history. runtime_state holds each device's rainfall baseline. Retention removes old readings, location history, and finished requests while preserving pending uploads and baseline state.
 
 Existing pending payloads are replayed unchanged, including older formats. Verify that the production backend still accepts them during rollout.
