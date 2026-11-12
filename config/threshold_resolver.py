@@ -16,12 +16,16 @@ it means ONLY water falls back to local, the other fields still use remote.
 of the API response (stored by APIPublisher.remote_config).
 This module keeps no state of its own -- it is a pure merge function.
 """
+import math
 from typing import Any, Optional
 
 
 def _pick(remote_value: Any, local_value: Any) -> Any:
     """Remote wins if present and not None; otherwise use local."""
-    return local_value if remote_value is None else remote_value
+    if isinstance(remote_value, (int, float)) and not isinstance(remote_value, bool):
+        if math.isfinite(remote_value) and remote_value >= 0:
+            return remote_value
+    return local_value
 
 
 def resolve_active_thresholds(local: dict, remote_config: Optional[dict]) -> dict:
@@ -30,17 +34,15 @@ def resolve_active_thresholds(local: dict, remote_config: Optional[dict]) -> dic
     field by field. Always returns a complete dict with the same shape
     as `local` (so the caller/_evaluate does not need to know where it came from).
     """
-    remote = remote_config or {}
+    remote = remote_config if isinstance(remote_config, dict) else {}
 
-    resolved = dict(local)  # a shallow copy is enough, all top-level fields are scalars/small dicts
-
-    resolved["waterDangerThreshold"] = _pick(
-        remote.get("waterDangerThreshold"), local["waterDangerThreshold"]
-    )
-    # rainfallDangerThreshold is not in thresholds.json yet -- if the backend also
-    # has not sent it, the result is None and _evaluate does not trigger a rain alarm.
-    resolved["rainfallDangerThreshold"] = _pick(
-        remote.get("rainfallDangerThreshold"), local.get("rainfallDangerThreshold")
-    )
+    resolved = {
+        key: _pick(remote.get(key), value) if isinstance(value, (int, float)) else value
+        for key, value in local.items()
+    }
+    # Accept main's newer depth-threshold name as well as deployed legacy APIs.
+    depth = _pick(remote.get("pressureDepthDangerThreshold"),
+                  local.get("waterDangerThreshold", local.get("pressureDepthDangerThreshold")))
+    resolved["waterDangerThreshold"] = _pick(remote.get("waterDangerThreshold"), depth)
 
     return resolved

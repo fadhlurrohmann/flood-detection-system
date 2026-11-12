@@ -3,14 +3,18 @@
   "deviceToken": "test",
   "telemetry": [
     {
-      "timestamp": "2025-06-30T07:00:00.000Z",
-      "waterLevel": 3.317,
-      "waterLevelCurrentMa": 14.614,
-      "temp": 29.5,
-      "humidity": 63.0,
-      "batteryLevel": 85.0,
-      "flameDetected": false,
-      "windSpeed": 2.5
+      "timestamp": "2026-10-21T00:00:00.000Z",
+      "bme_temp_c": null,
+      "bme_humidity_pct": null,
+      "bme_pressure_hpa": null,
+      "sps_depth_m": 0.2,
+      "sps_pressure_bar": 0.0196,
+      "wind_speed_ms": null,
+      "wind_dir": null,
+      "flow_lpm": 5,
+      "distance_m": 2.8,
+      "battery_pct": 85,
+      "rainfall": 0.5
     }
   ]
 }

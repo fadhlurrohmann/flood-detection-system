@@ -4,15 +4,18 @@
     "deviceToken": "test",
     "telemetry": [
       {
-        "timestamp": "2025-06-30T07:00:00.000Z",
-        "waterLevel": 0.375,
-        "waterLevelCurrentMa": 5.2,
-        "temp": 29.5,
-        "humidity": 63.0,
-        "batteryLevel": 85.0,
-        "flameDetected": false,
-        "windSpeed": 2.5,
-        "_edgeCase": "flame only — instant CRITICAL"
+        "timestamp": "2026-10-21T00:00:00.000Z",
+        "bme_temp_c": null,
+        "bme_humidity_pct": null,
+        "bme_pressure_hpa": null,
+        "sps_depth_m": 0.5,
+        "sps_pressure_bar": 0.049,
+        "wind_speed_ms": null,
+        "wind_dir": null,
+        "flow_lpm": 5,
+        "distance_m": 2.5,
+        "battery_pct": 85,
+        "rainfall": 0
       }
     ]
   },
@@ -21,15 +24,58 @@
     "deviceToken": "test",
     "telemetry": [
       {
-        "timestamp": "2025-06-30T07:00:00.000Z",
-        "waterLevel": 0.285,
-        "waterLevelCurrentMa": 4.912,
-        "temp": 29.5,
-        "humidity": 63.0,
-        "batteryLevel": 85.0,
-        "flameDetected": false,
-        "windSpeed": 15.1,
-        "_edgeCase": "wind only 15.1m/s — CRITICAL"
+        "timestamp": "2026-10-21T00:00:00.000Z",
+        "bme_temp_c": null,
+        "bme_humidity_pct": null,
+        "bme_pressure_hpa": null,
+        "sps_depth_m": 0.499,
+        "sps_pressure_bar": 0.0489,
+        "wind_speed_ms": null,
+        "wind_dir": null,
+        "flow_lpm": 5,
+        "distance_m": 2.501,
+        "battery_pct": 85,
+        "rainfall": 29.999
+      }
+    ]
+  },
+  {
+    "deviceId": "efws-001",
+    "deviceToken": "test",
+    "telemetry": [
+      {
+        "timestamp": "2026-10-21T00:00:00.000Z",
+        "bme_temp_c": null,
+        "bme_humidity_pct": null,
+        "bme_pressure_hpa": null,
+        "sps_depth_m": 0.2,
+        "sps_pressure_bar": 0.0196,
+        "wind_speed_ms": null,
+        "wind_dir": null,
+        "flow_lpm": 5,
+        "distance_m": 2.8,
+        "battery_pct": 85,
+        "rainfall": 30
+      }
+    ]
+  },
+  {
+    "deviceId": "efws-001",
+    "deviceToken": "test",
+    "telemetry": [
+      {
+        "timestamp": "2026-10-21T00:00:00.000Z",
+        "bme_temp_c": null,
+        "bme_humidity_pct": null,
+        "bme_pressure_hpa": null,
+        "sps_depth_m": null,
+        "sps_pressure_bar": null,
+        "wind_speed_ms": null,
+        "wind_dir": null,
+        "flow_lpm": null,
+        "distance_m": null,
+        "battery_pct": null,
+        "rainfall": null
       }
     ]
   }

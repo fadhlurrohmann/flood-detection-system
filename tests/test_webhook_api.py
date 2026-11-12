@@ -19,7 +19,6 @@ print("=" * 60)
 print("  TEST API Connectivity")
 print("=" * 60)
 print(f"deviceId    : {settings.DEVICE_ID}")
-print(f"deviceToken : {settings.DEVICE_TOKEN}")
 print(f"endpoint    : {settings.telemetry_endpoint()}\n")
 
 if "webhook.site/xxxxxxxx" in settings.API_BASE_URL:
@@ -32,13 +31,17 @@ sample = {
     "deviceToken": settings.DEVICE_TOKEN,
     "telemetry": [{
         "timestamp":            datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z",
-        "waterLevel":           3.3,
-        "waterLevelCurrentMa":  14.6,
-        "temp":                 29.5,
-        "humidity":             63.0,
-        "batteryLevel":         85.0,
-        "flameDetected":        False,
-        "windSpeed":            2.5,
+        "bme_temp_c": 25.0,
+        "bme_humidity_pct": 65.0,
+        "bme_pressure_hpa": 1012.0,
+        "sps_depth_m": 0.2,
+        "sps_pressure_bar": 0.0196,
+        "wind_speed_ms": 3.2,
+        "wind_dir": "NE",
+        "flow_lpm": 5.0,
+        "distance_m": 2.8,
+        "battery_pct": 85.0,
+        "rainfall": 0.0,
     }]
 }
 
@@ -50,3 +53,4 @@ if ok:
     print("✅ Success! Check the webhook.site page — the payload should appear there.")
 else:
     print("❌ Failed. Check the Pi's internet connection and EFWS_API_URL in .env")
+    sys.exit(1)

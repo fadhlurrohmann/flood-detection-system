@@ -67,6 +67,11 @@ def _identify_port(port: str) -> "str | None":
     """
     if serial is None:
         raise RuntimeError("pyserial is not installed - pip install pyserial")
+    # Wind and modem ports must be distinct; never probe a sensor with AT commands.
+    reserved = (settings.ANEMOMETER_PORT, settings.WIND_DIR_PORT)
+    if os.path.realpath(port) in {os.path.realpath(p) for p in reserved}:
+        logger.debug("Skipping reserved wind sensor port %s", port)
+        return None
     try:
         ser = serial.Serial(port, BAUD, timeout=TIMEOUT)
         at_resp = _send_at(ser, "AT", wait=1.0)
@@ -221,6 +226,9 @@ class SimInterface:
         logger.info("SimInterface: %s @ %s", module.upper(), port)
 
     def _init_driver(self, port: str, module: str):
+        if os.path.realpath(port) in {os.path.realpath(p) for p in
+                                     (settings.ANEMOMETER_PORT, settings.WIND_DIR_PORT)}:
+            raise ValueError(f"Modem port {port} is reserved for a wind sensor")
         if module == "a7670e":
             from communication.a7670e import A7670E
             return A7670E(port=port, baudrate=BAUD)

@@ -41,9 +41,10 @@ class RainfallSensor:
             )
 
         self.bus_num = bus if bus is not None else settings.I2C_BUS
-        self.address = address if address is not None else self.DEFAULT_ADDRESS
+        self.address = address if address is not None else settings.RAINFALL_I2C_ADDRESS
 
         self.bus = smbus2.SMBus(self.bus_num)
+        self._initialized = False
 
     ############################################################
     # LOW LEVEL
@@ -70,10 +71,9 @@ class RainfallSensor:
                 return list(read)
 
             except OSError:
-
+                if attempt == 2:
+                    raise
                 time.sleep(0.05)
-
-        raise
 
     def _write(self, register, data):
         if isinstance(data, int):
@@ -91,9 +91,9 @@ class RainfallSensor:
                 return
 
             except OSError:
+                if attempt == 2:
+                    raise
                 time.sleep(0.05)
-
-        raise
 
     ############################################################
     # DEVICE
@@ -119,6 +119,12 @@ class RainfallSensor:
             and
             vid == self.EXPECTED_VID
         )
+
+    def initialize(self):
+        if not self.begin():
+            raise RuntimeError("SEN0575 PID/VID mismatch")
+        self.set_rainfall_window(1)
+        self._initialized = True
 
     def firmware_version(self):
 
@@ -235,7 +241,8 @@ class RainfallSensor:
     ############################################################
 
     def read(self):
-
+        if not self._initialized:
+            self.initialize()
         return {
 
             "rainfall_total_mm": round(

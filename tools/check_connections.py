@@ -138,8 +138,10 @@ def _test_payloads(settings):
                        "longitude": settings.DEVICE_LOCATION["lon"]}),
         "telemetry": (settings.telemetry_endpoint(),
                       {**base, "telemetry": [{
-                          "timestamp": _now_iso(), "waterLevel": 0.0, "distanceM": None,
-                          "soilMoisture": {"surface": None, "deep": None}, "rainfallMm": 0.0}]}),
+                          "timestamp": _now_iso(), "bme_temp_c": 25.0, "bme_humidity_pct": 65.0,
+                          "bme_pressure_hpa": 1012.0, "sps_depth_m": 0.2, "sps_pressure_bar": 0.0196,
+                          "wind_speed_ms": 3.2, "wind_dir": "NE", "flow_lpm": 0.0,
+                          "distance_m": 2.8, "battery_pct": 83.3, "rainfall": 0.0}]}),
         "heartbeat": (settings.heartbeat_endpoint(), {**base, "batteryLevel": None}),
         "ack":       (settings.command_ack_endpoint(),
                       {**base, "commandId": "connection-check", "status": "SUCCESS", "error": ""}),

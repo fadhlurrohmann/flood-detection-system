@@ -22,9 +22,11 @@ retries are done through flush_queue() which is called from a separate thread
 independent of the sensor read cycle (3 minutes).
 """
 import json
-import time
 import logging
+import time
+
 import requests
+
 from config import settings
 
 logger = logging.getLogger("efws.api")
@@ -50,6 +52,7 @@ class APIPublisher:
         # fall back fully to the local hardcoded values while this is None.
         self.remote_config = None
         self._remote_config_updated_at = 0.0
+        self.command_handler = None
 
     # ------------------------------------------------------------------
     # Connectivity
@@ -121,10 +124,10 @@ class APIPublisher:
         except ValueError:
             resp_json = None
 
-        if resp.status_code < 400:
+        if 200 <= resp.status_code < 300:
             return True, resp.status_code, resp_json, False
 
-        if resp.status_code >= 500:
+        if resp.status_code >= 500 or resp.status_code in (408, 429):
             logger.warning("API HTTP %d (server error, transient) from %s: %s",
                            resp.status_code, endpoint, resp.text[:150])
             return False, resp.status_code, resp_json, True  # transient -> queue
@@ -150,7 +153,7 @@ class APIPublisher:
         body = json.dumps(payload, default=str)
         last_transient = True
 
-        logger.info("📤 SEND %s → %s | body=%s", label or endpoint.split("/")[-1], endpoint, body)
+        logger.info("SEND %s -> %s", label or endpoint.split("/")[-1], endpoint)
 
         for attempt in range(1, settings.API_MAX_RETRIES + 1):
             delivered, status, resp_json, transient = self._post_once(endpoint, body)
@@ -193,7 +196,8 @@ class APIPublisher:
     # ------------------------------------------------------------------
     def send_telemetry(self, payload: dict, db=None) -> bool:
         delivered, resp_json = self.send(settings.telemetry_endpoint(), payload, db=db, label="Telemetry")
-        self._apply_remote_config(resp_json)
+        if delivered:
+            self._apply_remote_config(resp_json)
         return delivered
 
     def _apply_remote_config(self, resp_json):
@@ -234,13 +238,12 @@ class APIPublisher:
     # their order getting mixed up.
     # ------------------------------------------------------------------
     def flush_queue(self, db, batch_size: int = 10):
-        if not self.online:
-            if not self._check_connectivity():
-                return 0
-
         pending = db.get_pending_queue(limit=batch_size)
         if not pending:
             return 0
+        if not self.online:
+            if not self._check_connectivity():
+                return 0
 
         logger.info("📤 Flushing %d item(s) from the offline queue (FIFO)...", len(pending))
         sent = 0
@@ -250,12 +253,12 @@ class APIPublisher:
                 payload = json.loads(item["payload"])
             except Exception as e:
                 logger.error("Queue #%d payload is corrupt: %s", item["id"], e)
-                db.mark_queue_failed(item["id"], f"invalid json: {e}")
+                db.mark_queue_discarded(item["id"], f"invalid json: {e}")
                 continue
 
             endpoint = item["endpoint"]  # the endpoint stored when the item was queued
             body = json.dumps(payload, default=str)
-            logger.info("📤 SEND (from offline queue #%d) → %s | body=%s", item["id"], endpoint, body)
+            logger.info("SEND queued #%d -> %s", item["id"], endpoint)
 
             delivered, status, resp_json, transient = self._post_once(endpoint, body)
 
@@ -267,6 +270,10 @@ class APIPublisher:
                 # If this happens to be a telemetry item, sync the config too.
                 if endpoint == settings.telemetry_endpoint():
                     self._apply_remote_config(resp_json)
+                if endpoint == settings.heartbeat_endpoint() and self.command_handler and isinstance(resp_json, dict):
+                    commands = resp_json.get("commands")
+                    if isinstance(commands, list) and commands:
+                        self.command_handler(commands)
 
             elif transient:
                 # The network dropped again in the middle of the flush -- stop, KEEP the
@@ -277,7 +284,7 @@ class APIPublisher:
 
             else:
                 # 4xx -- the server permanently rejected it, drop it from the queue (do not block the FIFO forever).
-                db.mark_queue_failed(item["id"], f"server rejected (HTTP {status})")
+                db.mark_queue_discarded(item["id"], f"server rejected (HTTP {status})")
                 logger.warning("🚫 Queue #%d rejected by server (HTTP %s) -- discarded.", item["id"], status)
 
         if sent:

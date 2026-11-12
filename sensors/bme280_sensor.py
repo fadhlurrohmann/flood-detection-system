@@ -9,7 +9,7 @@ from config import settings
 
 try:
     import smbus2
-    import sensors.bme280_sensor as _bme280_lib
+    import bme280 as _bme280_lib
 except ImportError:
     smbus2 = None
     _bme280_lib = None
@@ -23,7 +23,11 @@ class BME280Sensor:
         self.bus_num  = bus     if bus     is not None else settings.I2C_BUS
         self.address  = address if address is not None else settings.BME280_ADDRESS
         self.bus       = smbus2.SMBus(self.bus_num)
-        self.calib     = _bme280_lib.load_calibration_params(self.bus, self.address)
+        try:
+            self.calib = _bme280_lib.load_calibration_params(self.bus, self.address)
+        except Exception:
+            self.bus.close()
+            raise
 
     def read(self) -> dict:
         try:

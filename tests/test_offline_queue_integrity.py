@@ -33,13 +33,17 @@ SAMPLE_PAYLOAD = {
     "deviceToken": "test",
     "telemetry": [{
         "timestamp":            "2026-07-07T00:00:00.000Z",
-        "waterLevel":           2.1,
-        "waterLevelCurrentMa":  12.4,
-        "temp":                 42.5,
-        "humidity":             67.1,
-        "batteryLevel":         85.0,
-        "flameDetected":        False,
-        "windSpeed":            3.4,
+        "bme_temp_c": 25.0,
+        "bme_humidity_pct": 65.0,
+        "bme_pressure_hpa": 1012.0,
+        "sps_depth_m": 2.1,
+        "sps_pressure_bar": 0.2059,
+        "wind_speed_ms": 3.2,
+        "wind_dir": "NE",
+        "flow_lpm": 5.0,
+        "distance_m": 0.9,
+        "battery_pct": 85.0,
+        "rainfall": 35.0,
     }]
 }
 
@@ -59,6 +63,10 @@ def main():
     failures = []
 
     # 1) Simulate offline: the send must fail & automatically go into the queue
+    # Simulate loss without ever contacting the URL from a user's .env.
+    api._post_once = lambda *_: (False, None, None, True)
+    from config import settings
+    settings.API_RETRY_DELAY = 0
     ok = api.send_telemetry(SAMPLE_PAYLOAD, db=db)
     if ok:
         failures.append("send_telemetry() should have failed (endpoint is deliberately unreachable)")

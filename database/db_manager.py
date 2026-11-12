@@ -1,31 +1,44 @@
 """
-SQLite local data logger untuk EFWS.
+Local SQLite data logger for EFWS.
 
-Prinsip alur data:
-  baca sensor → SIMPAN ke DB dulu (sensor_readings, sumber kebenaran lokal)
-              → coba kirim ke API
-              → gagal (sinyal mati)? → masuk antrian (api_queue), payload
-                disimpan APA ADANYA (JSON persis) supaya waktu di-flush
-                ulang nanti datanya tidak berubah sedikit pun
-              → EFWSPublisher cek sinyal ulang tiap EFWS_CONNECTIVITY_CHECK_SEC
-                (default 2 menit) lalu auto flush kalau sudah online lagi.
+Data flow principle:
+  read sensor → SAVE to the DB first (sensor_readings, the local source of truth)
+              → try to send to the API
+              → failed (no signal)? → goes into the queue (api_queue), the payload
+                is stored AS-IS (exact JSON) so that when it is flushed
+                again later the data does not change at all
+              → EFWSPublisher re-checks the signal every EFWS_CONNECTIVITY_CHECK_SEC
+                (default 2 minutes) and auto-flushes once it is back online.
 
-TIDAK menyimpan alarm_level / triggered_by / threshold apa pun — evaluasi
-alarm & threshold sekarang murni tanggung jawab backend. Device cuma
-mengevaluasi status secara LOKAL (main.py) untuk menyalakan sirine secara
-real-time, tanpa mempersistensikannya di sini.
+Does NOT store any alarm_level / triggered_by / threshold — alarm &
+threshold evaluation is now purely the backend's responsibility. The device only
+evaluates the status LOCALLY (main.py) to sound the siren in
+real time, without persisting it here.
 """
-import sqlite3
 import json
 import os
-from datetime import datetime, timezone, timedelta
+import sqlite3
+import threading
+from datetime import datetime, timedelta, timezone
+from functools import wraps
+
 from config import settings
 
 
+def _locked(method):
+    @wraps(method)
+    def wrapper(self, *args, **kwargs):
+        with self._lock:
+            return method(self, *args, **kwargs)
+    return wrapper
+
+
 class DBManager:
-    def __init__(self, db_path: str = settings.DB_PATH):
+    def __init__(self, db_path=None):
+        db_path = settings.DB_PATH if db_path is None else db_path
         os.makedirs(os.path.dirname(db_path) or ".", exist_ok=True)
-        self.conn = sqlite3.connect(db_path, check_same_thread=False)
+        self._lock = threading.RLock()
+        self.conn = sqlite3.connect(db_path, check_same_thread=False, timeout=30)
         self.conn.row_factory = sqlite3.Row
         self._init_tables()
 
@@ -33,32 +46,25 @@ class DBManager:
     def _init_tables(self):
         cur = self.conn.cursor()
 
-        # Tabel utama: satu baris per siklus baca, kolom per sensor mentah.
-        # Tidak ada kolom status/alarm/threshold — itu urusan backend.
+        # Main table: one row per read cycle, one column per raw sensor value.
+        # No status/alarm/threshold columns — that is the backend's job.
         cur.execute("""
             CREATE TABLE IF NOT EXISTS sensor_readings (
-                id                  INTEGER PRIMARY KEY AUTOINCREMENT,
-                timestamp           TEXT    NOT NULL,
-                device_id           TEXT    NOT NULL,
-                bme_temperature_c   REAL, 
-                bme_humidity_pct    REAL,
-                bme_pressure_hpa    REAL,
-                wind_speed_ms       REAL,
-                wind_direction      TEXT,
-                sps_current_ma      REAL, 
-                sps_depth_m         REAL,
-                sps_pressure_bar    REAL, 
-                sps_fault_open_loop INTEGER,
-                flow_lpm            REAL,  
-                distance_m          REAL,  
-                battery_voltage     REAL,  
-                battery_pct         REAL,
-                rainfall_delta_mm   REAL,   -- mm sejak telemetry SEBELUMNYA (bukan window 1 jam)
-                full_payload        TEXT    -- JSON PERSIS yang dikirim ke API (untuk audit)
+                id                INTEGER PRIMARY KEY AUTOINCREMENT,
+                timestamp         TEXT    NOT NULL,
+                device_id         TEXT    NOT NULL,
+
+                water_current_ma  REAL,
+                water_depth_m     REAL,
+                water_fault_open  INTEGER,
+                rainfall_mm       REAL,   -- accumulated rainfall since last reset/reading
+                rain_working_hrs  REAL,   -- sensor's cumulative operating time
+
+                full_payload      TEXT    -- the EXACT JSON sent to the API (for audit)
             )
         """)
 
-        # Antrian pengiriman API yang gagal (offline buffer)
+        # Queue of failed API sends (offline buffer)
         cur.execute("""
             CREATE TABLE IF NOT EXISTS api_queue (
                 id          INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -71,133 +77,134 @@ class DBManager:
             )
         """)
 
-        # Log setiap kali Location Publisher MENCOBA kirim (bukan cuma yang
-        # sukses -- kalau gagal & masuk api_queue, baris ini tetap ada,
-        # supaya riwayat "device pernah lapor posisi X pada waktu Y" tidak
-        # hilang, terpisah dari mekanisme retry queue).
+        # Additive migration preserves historical rows, including legacy columns.
+        columns = {row[1] for row in cur.execute("PRAGMA table_info(sensor_readings)")}
+        for name in (
+            "water_current_ma", "water_depth_m", "rainfall_mm", "rain_working_hrs",
+            "water_pressure_bar", "distance_m", "ultrasonic_depth_m",
+            "flow_lpm", "flow_total_liters", "rainfall_total_mm",
+            "rainfall_last_hour_mm", "battery_voltage", "battery_percent",
+            "bme_temperature_c", "bme_humidity_pct", "bme_pressure_hpa", "wind_speed_ms",
+            "sps_current_ma", "sps_depth_m", "sps_pressure_bar", "battery_pct", "rainfall_delta_mm",
+        ):
+            if name not in columns:
+                cur.execute(f"ALTER TABLE sensor_readings ADD COLUMN {name} REAL")
+        if "sensor_errors" not in columns:
+            cur.execute("ALTER TABLE sensor_readings ADD COLUMN sensor_errors TEXT")
+        for name, column_type in {"water_fault_open": "INTEGER", "sps_fault_open_loop": "INTEGER",
+                                  "wind_direction": "TEXT"}.items():
+            if name not in columns:
+                cur.execute(f"ALTER TABLE sensor_readings ADD COLUMN {name} {column_type}")
+
         cur.execute("""
             CREATE TABLE IF NOT EXISTS location_log (
-                id          INTEGER PRIMARY KEY AUTOINCREMENT,
-                timestamp   TEXT    NOT NULL,
-                device_id   TEXT    NOT NULL,
-                latitude    REAL,
-                longitude   REAL,
-                source      TEXT,     -- "gps" atau "config" (fallback)
-                fix         INTEGER,  -- 1 kalau GPS benar-benar fix, 0 kalau fallback
-                full_payload TEXT     -- JSON PERSIS yang dikirim ke API (untuk audit)
+                id INTEGER PRIMARY KEY AUTOINCREMENT, timestamp TEXT NOT NULL,
+                device_id TEXT NOT NULL, latitude REAL, longitude REAL,
+                source TEXT, fix INTEGER, full_payload TEXT
             )
         """)
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_location_ts ON location_log(timestamp)")
+        cur.execute("CREATE TABLE IF NOT EXISTS runtime_state (key TEXT PRIMARY KEY, value REAL)")
 
         cur.execute("CREATE INDEX IF NOT EXISTS idx_readings_ts ON sensor_readings(timestamp)")
         cur.execute("CREATE INDEX IF NOT EXISTS idx_queue_sent  ON api_queue(sent)")
-        cur.execute("CREATE INDEX IF NOT EXISTS idx_location_ts ON location_log(timestamp)")
 
         self.conn.commit()
 
     # ─── Logging sensor readings ──────────────────────────────────
+    @_locked
     def log_reading(self, data: dict, api_payload: dict) -> int:
-        """
-        Simpan satu siklus baca ke database SEBELUM dicoba dikirim ke API.
-        - data:        dict hasil EFWS._read_all() → {"mq2":{...}, "mq135":{...},
-                       "bme280":{...}, "soil":{"surface":{...},"deep":{...}},
-                       "wind":{...}, "pressure":{...}, "battery":{...}}
-        - api_payload: payload PERSIS yang akan dikirim ke API, disimpan utuh
-                       di kolom full_payload untuk audit/pembanding dengan isi
-                       antrian offline. Kolom rainfall_delta_mm diambil dari
-                       SINI (bukan dihitung ulang dari data mentah), supaya
-                       nilainya PERSIS sama dengan yang benar-benar dikirim
-                       (main.py EFWS._rainfall_delta() adalah sumber kebenaran
-                       satu-satunya untuk nilai delta ini).
-        Return: row id.
-        """
-        bme        = data.get("bme_sensor", {})
-        sps        = data.get("sps_sensor", {})
-        wind_speed = data.get("wind_speed_sensor", {})
-        wind_dir   = data.get("wind_dir_sensor", {})
-        flow       = data.get("flow_sensor", {})
-        distance   = data.get("distance_sensor", {})
-        battery    = data.get("battery_sensor", {})
-        rainfall_delta_mm = None
-        
-        try:
-            rainfall_delta_mm = api_payload["telemetry"][0].get("rainfall")
-        except (KeyError, IndexError, TypeError):
-            pass
-
-        cur = self.conn.cursor()
-        cur.execute("""
-            INSERT INTO sensor_readings (
-                timestamp, device_id,
-                bme_temperature_c, bme_humidity_pct, bme_pressure_hpa,
-                wind_speed_ms, wind_direction,
-                sps_current_ma, sps_depth_m, sps_pressure_bar, sps_fault_open_loop,
-                flow_lpm,
-                distance_m,
-                battery_voltage, battery_pct,
-                rainfall_delta_mm,
-                full_payload
-            ) VALUES (
-                ?,?,  ?,?,?,  ?,?,  ?,?,?,?,  ?,  ?,  ?,?,  ?,  ?
+        """Store all sensor values and the exact payload without dropping legacy columns."""
+        pressure = data.get("pressure", {})
+        rain = data.get("rain", {})
+        flow = data.get("flow", {})
+        battery = data.get("battery", {})
+        bme = data.get("bme", {})
+        wind = data.get("wind", {})
+        direction = data.get("wind_dir", {})
+        distance = data.get("distance", {}).get("distance_m")
+        height = settings.ULTRASONIC_MOUNT_HEIGHT_M
+        ultrasonic_depth = round(height - distance, 3) if (
+            height is not None and distance is not None and 0 <= distance <= height
+        ) else None
+        fault = pressure.get("fault_open_loop")
+        fault = int(fault) if fault is not None else None
+        errors = {name: reading["error"] for name, reading in data.items()
+                  if isinstance(reading, dict) and reading.get("error")}
+        record = {
+            "timestamp": data.get("_timestamp", datetime.now(timezone.utc).isoformat()),
+            "device_id": settings.DEVICE_ID,
+            "water_current_ma": pressure.get("current_ma"),
+            "water_depth_m": pressure.get("depth_m"),
+            "water_fault_open": fault,
+            "water_pressure_bar": pressure.get("pressure_bar"),
+            "rainfall_mm": rain.get("rainfall_last_hour_mm"),
+            "rain_working_hrs": rain.get("working_time_hours"),
+            "distance_m": distance, "ultrasonic_depth_m": ultrasonic_depth,
+            "flow_lpm": flow.get("flow_lpm"), "flow_total_liters": flow.get("total_liters"),
+            "rainfall_total_mm": rain.get("rainfall_total_mm"),
+            "rainfall_last_hour_mm": rain.get("rainfall_last_hour_mm"),
+            "battery_voltage": battery.get("voltage"), "battery_percent": battery.get("percent"),
+            "bme_temperature_c": bme.get("temperature_c"),
+            "bme_humidity_pct": bme.get("humidity_percent"),
+            "bme_pressure_hpa": bme.get("pressure_hpa"),
+            "wind_speed_ms": wind.get("speed_ms"), "wind_direction": direction.get("direction_abbr"),
+            "sps_current_ma": pressure.get("current_ma"), "sps_depth_m": pressure.get("depth_m"),
+            "sps_pressure_bar": pressure.get("pressure_bar"), "sps_fault_open_loop": fault,
+            "battery_pct": battery.get("percent"),
+            "rainfall_delta_mm": api_payload["telemetry"][0].get("rainfall"),
+            "full_payload": json.dumps(api_payload, allow_nan=False),
+            "sensor_errors": json.dumps(errors),
+        }
+        placeholders = ", ".join("?" for _ in record)
+        with self.conn:
+            cur = self.conn.execute(
+                f"INSERT INTO sensor_readings ({', '.join(record)}) VALUES ({placeholders})",
+                tuple(record.values()),
             )
-        """, (
-            datetime.now(timezone.utc).isoformat(),
-            settings.DEVICE_ID,
-            bme.get("temperature_c"), bme.get("humidity_percent"), bme.get("pressure_hpa"),
-            wind_speed.get("speed_ms"), wind_dir.get("direction_abbr"),
-            sps.get("current_ma"), sps.get("depth_m"), sps.get("pressure_bar"), int(bool(sps.get("fault_open_loop", False))),
-            flow.get("flow_lpm"),
-            distance.get("distance_m"),
-            battery.get("voltage"), battery.get("percent"),
-            rainfall_delta_mm,
-            json.dumps(api_payload, default=str),
-        ))
-        self.conn.commit()
-        return cur.lastrowid
-
-    # ─── Logging location (Location Publisher) ────────────────────
-    def log_location(self, location: dict, api_payload: dict) -> int:
-        """
-        Simpan setiap kali Location Publisher MENCOBA kirim -- terlepas dari
-        sukses/gagalnya pengiriman (kalau gagal, tetap tercatat di sini DAN
-        masuk api_queue lewat mekanisme retry terpisah).
-        - location:    dict {"lat", "lon", "source", "fix"} (self._location
-                       milik EFWS di main.py).
-        - api_payload: payload PERSIS yang dikirim ke API (untuk audit).
-        Return: row id.
-        """
-        cur = self.conn.cursor()
-        cur.execute("""
-            INSERT INTO location_log (
-                timestamp, device_id, latitude, longitude, source, fix, full_payload
-            ) VALUES (?, ?, ?, ?, ?, ?, ?)
-        """, (
-            datetime.now(timezone.utc).isoformat(),
-            settings.DEVICE_ID,
-            location.get("lat"),
-            location.get("lon"),
-            location.get("source"),
-            int(bool(location.get("fix", False))),
-            json.dumps(api_payload, default=str),
-        ))
-        self.conn.commit()
         return cur.lastrowid
 
     # ─── API queue (offline buffer) ───────────────────────────────
+    @_locked
     def queue_api(self, endpoint: str, payload: dict):
-        """Simpan payload ke antrian offline APA ADANYA (tidak diubah/dihitung ulang)."""
-        cur = self.conn.cursor()
-        cur.execute("""
-            INSERT INTO api_queue (timestamp, endpoint, payload)
-            VALUES (?, ?, ?)
-        """, (
-            datetime.now(timezone.utc).isoformat(),
-            endpoint,
-            json.dumps(payload, default=str),
-        ))
-        self.conn.commit()
+        """Save the payload to the offline queue AS-IS (not modified/recomputed)."""
+        self.queue_bundle([(endpoint, payload)])
 
+    @_locked
+    def queue_bundle(self, payloads, rainfall_total_mm=None, device_id=None):
+        """Atomically persist an entire upload bundle before any network request."""
+        timestamp = datetime.now(timezone.utc).isoformat()
+        rows = [(timestamp, endpoint, json.dumps(payload, allow_nan=False))
+                for endpoint, payload in payloads]
+        with self.conn:
+            self.conn.executemany(
+                "INSERT INTO api_queue (timestamp, endpoint, payload) VALUES (?, ?, ?)", rows
+            )
+            if rainfall_total_mm is not None and device_id is not None:
+                self.conn.execute("INSERT OR REPLACE INTO runtime_state (key, value) VALUES (?, ?)",
+                                  (f"rainfall_total:{device_id}", rainfall_total_mm))
+
+    @_locked
+    def get_rainfall_baseline(self, device_id):
+        row = self.conn.execute("SELECT value FROM runtime_state WHERE key=?",
+                                (f"rainfall_total:{device_id}",)).fetchone()
+        return row[0] if row is not None else None
+
+    @_locked
+    def log_location(self, location, api_payload):
+        with self.conn:
+            cur = self.conn.execute("""
+                INSERT INTO location_log
+                (timestamp, device_id, latitude, longitude, source, fix, full_payload)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            """, (datetime.now(timezone.utc).isoformat(), settings.DEVICE_ID,
+                  location.get("lat"), location.get("lon"), location.get("source"),
+                  int(bool(location.get("fix"))), json.dumps(api_payload, allow_nan=False)))
+        return cur.lastrowid
+
+    @_locked
     def get_pending_queue(self, limit: int = 20) -> list:
-        """Ambil antrian yang belum terkirim (FIFO). Item gagal >10x dilewati (dianggap stale)."""
+        """Fetch the queue items not yet sent (FIFO). Items that failed >10x are skipped (considered stale)."""
         cur = self.conn.cursor()
         cur.execute("""
             SELECT id, endpoint, payload, attempts
@@ -208,15 +215,18 @@ class DBManager:
         """, (limit,))
         return [dict(r) for r in cur.fetchall()]
 
+    @_locked
     def count_pending_queue(self) -> int:
         cur = self.conn.cursor()
         cur.execute("SELECT COUNT(*) FROM api_queue WHERE sent=0 AND attempts < 10")
         return cur.fetchone()[0]
 
+    @_locked
     def mark_queue_sent(self, queue_id: int):
         self.conn.execute("UPDATE api_queue SET sent=1 WHERE id=?", (queue_id,))
         self.conn.commit()
 
+    @_locked
     def mark_queue_failed(self, queue_id: int, error: str):
         self.conn.execute(
             "UPDATE api_queue SET attempts=attempts+1, last_error=? WHERE id=?",
@@ -224,42 +234,48 @@ class DBManager:
         )
         self.conn.commit()
 
+    @_locked
+    def mark_queue_discarded(self, queue_id: int, error: str):
+        self.conn.execute("UPDATE api_queue SET sent=-1, last_error=? WHERE id=?", (error, queue_id))
+        self.conn.commit()
+
     # ─── Query helpers ────────────────────────────────────────────
+    @_locked
     def recent_readings(self, limit: int = 20) -> list:
         cur = self.conn.cursor()
         cur.execute("""
-            SELECT  timestamp, device_id,
-                    bme_temperature_c, bme_humidity_pct, bme_pressure_hpa,
-                    wind_speed_ms, wind_direction,
-                    sps_current_ma, sps_depth_m, sps_pressure_bar, sps_fault_open_loop,
-                    flow_lpm,
-                    distance_m,
-                    battery_voltage, battery_pct,
-                    rainfall_delta_mm
+            SELECT id, timestamp,
+                   water_depth_m, water_fault_open, distance_m, flow_lpm,
+                   rainfall_last_hour_mm, battery_voltage, sensor_errors,
+                   bme_temperature_c, bme_humidity_pct, bme_pressure_hpa,
+                   wind_speed_ms, wind_direction, sps_current_ma, sps_depth_m,
+                   sps_pressure_bar, sps_fault_open_loop, battery_pct, rainfall_delta_mm
             FROM   sensor_readings
             ORDER  BY id DESC LIMIT ?
         """, (limit,))
         return [dict(r) for r in cur.fetchall()]
 
+    @_locked
     def close(self):
         self.conn.close()
 
-    # ─── Retensi data (auto-cleanup) ──────────────────────────────
+    # ─── Data retention (auto-cleanup) ────────────────────────────
+    @_locked
     def purge_old_data(self, days: int = 3) -> dict:
         """
-        Hapus baris LAMA (lebih tua dari `days` hari) dari database lokal.
-        Dipanggil otomatis oleh background thread (main.py:
-        EFWS._retention_loop), bukan menghapus file database-nya sendiri --
-        cuma baris lama di dalamnya, supaya data terbaru (<= `days` hari)
-        tetap ada dan ukuran file tidak terus membengkak.
+        Delete OLD rows (older than `days` days) from the local database.
+        Called automatically by a background thread (main.py:
+        EFWS._retention_loop). It does not delete the database file itself --
+        only the old rows inside it, so recent data (<= `days` days)
+        stays and the file size does not keep growing.
 
-        - sensor_readings : semua baris lebih tua dari cutoff dihapus.
-        - api_queue        : HANYA baris yang statusnya sudah "selesai"
-                              (sent=1, atau attempts>=10 alias dianggap
-                              gagal permanen) yang dihapus. Item yang masih
-                              aktif menunggu retry TIDAK dihapus meskipun
-                              usianya lebih dari `days` hari, supaya tidak
-                              kehilangan data yang belum sempat terkirim.
+        - sensor_readings : every row older than the cutoff is deleted.
+        - api_queue        : ONLY rows whose status is already "finished"
+                              (sent=1, or attempts>=10 i.e. considered
+                              permanently failed) are deleted. Items still
+                              actively waiting for a retry are NOT deleted even if
+                              they are older than `days` days, so no
+                              data that has not yet been sent is lost.
 
         Return: {"sensor_readings_deleted": int, "api_queue_deleted": int}
         """
@@ -270,7 +286,7 @@ class DBManager:
         deleted_readings = cur.rowcount
 
         cur.execute(
-            "DELETE FROM api_queue WHERE timestamp < ? AND (sent = 1 OR attempts >= 10)",
+            "DELETE FROM api_queue WHERE timestamp < ? AND (sent != 0 OR attempts >= 10)",
             (cutoff,),
         )
         deleted_queue = cur.rowcount
@@ -279,8 +295,6 @@ class DBManager:
         deleted_location = cur.rowcount
 
         self.conn.commit()
-        if deleted_readings or deleted_queue or deleted_location:
-            self.conn.execute("VACUUM")  # kecilkan ukuran file .db setelah hapus
 
         return {
             "sensor_readings_deleted": deleted_readings,

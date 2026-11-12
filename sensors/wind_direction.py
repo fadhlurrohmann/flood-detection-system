@@ -1,4 +1,9 @@
-import serial, time
+import time
+
+try:
+    import serial
+except ImportError:
+    serial = None
 
 from config import settings
 
@@ -9,8 +14,8 @@ class WindDirectionSensor:
     Sensor arah angin 4-kabel, UART:
       VCC (merah) -> 3.3V
       GND (hitam) -> GND
-      TX  (kuning) -> GPIO14 / pin 8  (RXD Raspberry Pi)
-      RX  (hijau)  -> GPIO15 / pin 10 (TXD Raspberry Pi)
+      Sensor TX -> GPIO15 / pin 10 (Raspberry Pi RXD)
+      Sensor RX -> GPIO14 / pin 8  (Raspberry Pi TXD)
 
     Protokol: baris teks "*<kode>#", kode 1-8 = N/NE/E/SE/S/SW/W/NW.
 
@@ -27,6 +32,8 @@ class WindDirectionSensor:
     """
 
     def __init__(self):
+        if serial is None:
+            raise RuntimeError("pyserial is required for the wind-direction sensor")
         self.ser = serial.Serial(
             settings.WIND_DIR_PORT,
             settings.WIND_DIR_BAUDRATE,
@@ -88,7 +95,9 @@ class WindDirectionSensor:
             # 2. Kuras semua data yang masih tersisa di buffer
             #    supaya kita mengambil data PALING BARU
             # ---------------------------------------------------------
-            while self.ser.in_waiting > 0:
+            for _ in range(64):
+                if self.ser.in_waiting == 0:
+                    break
                 raw = self.ser.readline().decode(
                     "utf-8",
                     errors="ignore"
@@ -135,6 +144,9 @@ class WindDirectionSensor:
                 "direction_name": None,
                 "error": str(e),
             }
+
+    def close(self):
+        self.ser.close()
 # Blok untuk pengetesan langsung (hardware check manual, BUKAN pytest --
 # lihat tests/hardware_checks/ untuk konvensi penamaan check_*.py project ini)
 if __name__ == "__main__":

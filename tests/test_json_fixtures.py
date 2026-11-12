@@ -53,8 +53,8 @@ def main():
 
         for i, item in enumerate(items, 1):
             t     = item.get("telemetry", [{}])[0]
-            rain  = t.get("rainfallMm", "?")
-            wl    = t.get("waterLevel", "?")
+            rain  = t.get("rainfall", "?")
+            wl    = t.get("sps_depth_m", "?")
             edge  = f"  [{t.get('_edgeCase','')}]" if "_edgeCase" in t else ""
             total += 1
 
@@ -70,6 +70,8 @@ def main():
         print("✅ All fixtures sent — check webhook.site/the mock server.")
     else:
         print("❌ Some failed — check the connection and EFWS_API_URL in .env.")
+        return 1
+    return 0
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

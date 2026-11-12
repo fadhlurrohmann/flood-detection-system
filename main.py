@@ -1,753 +1,403 @@
-"""
-Early Fire Warning System (EFWS) - Main Orchestrator
-
-ARSITEKTUR (scheduler per-endpoint, independen -- lihat REVISI di bawah):
-  - Sensor Sampling (SENSOR_READ_INTERVAL_SEC): HANYA baca sensor + evaluasi
-    threshold + sirine lokal. TIDAK PERNAH kirim ke API, TIDAK PERNAH simpan
-    ke SQLite, TIDAK PERNAH ambil GPS. Satu-satunya efeknya ke luar dirinya
-    sendiri: set/clear status Emergency Mode (single source of truth untuk
-    NORMAL vs EMERGENCY) dan simpan snapshot data sensor terbaru.
-  - Location Publisher (thread sendiri, LOCATION_INTERVAL_SEC = 30 menit,
-    SELALU, tidak pernah berubah walau Emergency Mode aktif): ambil GPS
-    (HANYA di sini GPS diambil, tepat sebelum kirim), lalu POST /sensors/location.
-  - Telemetry Publisher (thread sendiri, satu scheduler yang interval-nya
-    ADAPTIF: TELEMETRY_INTERVAL_SEC=30 menit saat NORMAL, beralih ke
-    EMERGENCY_TELEMETRY_INTERVAL_SEC=10 menit selama Emergency Mode aktif).
-    Baru di sinilah data disimpan ke SQLite (sensor_readings) dan
-    dikirim ke POST /sensors/telemetry. Begitu Emergency Mode dimulai,
-    thread ini dibangunkan SEKARANG JUGA (tidak menunggu sisa interval lama).
-  - Heartbeat Publisher (thread sendiri, HEARTBEAT_INTERVAL_SEC = 5 menit,
-    SELALU, tidak bergantung ke Telemetry/Location/Emergency Mode sama
-    sekali): POST /sensors/heartbeat. Endpoint 4 (/sensors/commands/ack)
-    HANYA jalan dari sini, event-driven, kalau response heartbeat bawa
-    'commands' -- di luar jadwal manapun.
-  - Threshold aktif = remote config (dari response Telemetry) di-merge
-    per-field dengan hardcoded lokal (config/threshold_resolver.py).
-  - Retry offline queue (tiap 2 menit) tetap di thread terpisah, independen
-    dari keempat hal di atas.
-"""
+"""Flood warning runtime: local sensing/alarm, durable uploads, background GPS."""
 import json
-import time
 import logging
-import threading
+import math
+import signal
 import subprocess
-import traceback
+import threading
+import time
+from datetime import datetime, timezone
 from pathlib import Path
-from datetime import UTC, datetime, timezone
-from zoneinfo import ZoneInfo
 
+from communication.api_publisher import APIPublisher
 from config import settings
 from config.threshold_resolver import resolve_active_thresholds
 from database.db_manager import DBManager
-from communication.api_publisher import APIPublisher
+from sensors.null_sensor import NullAlarmController, NullSensor
 
-# ─── Buat folder yang dibutuhkan sebelum logger ──────────────────
-Path(settings.LOG_PATH).parent.mkdir(parents=True, exist_ok=True)
-Path(settings.DB_PATH).parent.mkdir(parents=True, exist_ok=True)
-
-# ─── Logger setup ────────────────────────────────────────────────
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-    datefmt="%Y-%m-%dT%H:%M:%S",
-    handlers=[
-        logging.StreamHandler(),
-        logging.FileHandler(settings.LOG_PATH, mode="a"),
-    ],
-)
 logger = logging.getLogger("efws.main")
 
 
-
-# ─── GPS cache reader (baca dari file JSON yg ditulis ews_network_setup.sh) ──
-def _read_gps_cache() -> "dict | None":
-    """
-    Baca file cache GPS yang ditulis oleh ews_network_setup.sh / gps_refresh.sh.
-    Return dict GPS jika fix=true, atau None jika tidak ada / fix=false.
-    main.py tidak pernah membuka serial port AT command secara langsung.
-    """
-    cache_path = settings.GPS_CACHE_FILE
+def _load_sim():
     try:
-        with open(cache_path) as f:
-            data = json.load(f)
-        if data.get("fix") is True:
-            return data
-        return None
-    except FileNotFoundError:
-        return None
-    except Exception as e:
-        logger.debug("GPS cache read error: %s", e)
+        from communication.sim_detector import detect_sim
+        return detect_sim()
+    except Exception:
+        logger.exception("SIM unavailable; using configured location")
         return None
 
 
-# ─── Sensor + alarm factory ──────────────────────────────────────
 def _load_sensors_and_alarm():
     if settings.RUN_MODE == "mock":
-        logger.info("Mode: MOCK — sensor disimulasi, tidak ada akses GPIO/I2C")
         from sensors.mock_sensors import (
-            MockMQ2, MockMQ135, MockBME280, MockPressureWater,
-            MockSoilMoisture, MockAnemometer, MockWindDirection, MockBattery,
-            MockFlame, MockRainfall, MockAlarmController,
+            MockAlarmController,
+            MockBattery,
+            MockDistance,
+            MockPressureWater,
+            MockRainfall,
+            MockWaterflow,
+            MockBME280,
+            MockAnemometer,
+            MockWindDirection,
         )
         return {
-            "mq2":      MockMQ2(),
-            "mq135":    MockMQ135(),
-            "bme280":   MockBME280(),
-            "pressure": MockPressureWater(),
-            "soil":     MockSoilMoisture(),
-            "wind":     MockAnemometer(),
+            "pressure": MockPressureWater(), "rain": MockRainfall(),
+            "distance": MockDistance(), "flow": MockWaterflow(),
+            "battery": MockBattery(),
+            "bme": MockBME280(), "wind": MockAnemometer(),
             "wind_dir": MockWindDirection(),
-            "battery":  MockBattery(),
-            "flame":    MockFlame(),
-            "rainfall": MockRainfall(),
-            
-            
         }, MockAlarmController()
-    else:
-        logger.info("Mode: HARDWARE — mengakses GPIO/SPI/I2C nyata")
-        from sensors.bme280_sensor   import BME280Sensor
-        from sensors.pressure        import PressureWaterSensor
-        from sensors.wind_speed      import WindSpeedSensor
-        from sensors.wind_direction  import WindDirectionSensor
-        from sensors.YF_S201         import YFS201
-        from sensors.JSN_SR04T       import JSN_SR04T
-        from sensors.battery         import BatterySensor
-        from sensors.rainfall        import RainfallSensor
-        from sensors.null_sensor     import NullSensor, NullAlarmController
-        from alarm.siren             import AlarmController
 
-        factories = {
-            "bme_sensor":          BME280Sensor,
-            "sps_sensor":          PressureWaterSensor,
-            "wind_speed_sensor":   WindSpeedSensor,
-            "wind_dir_sensor":     WindDirectionSensor,
-            "flow_sensor":         YFS201,  
-            "distance_sensor":     JSN_SR04T,
-            "battery_sensor":      BatterySensor,
-            "rainfall_sensor":     RainfallSensor,
-        }
-        sensors = {}
-        for name, factory in factories.items():
-            try:
-                sensors[name] = factory()
-            except Exception as e:
-                logger.error(
-                    "Sensor '%s' GAGAL diinisialisasi (dianggap TIDAK TERPASANG, "
-                    "nilainya akan 0/null terus di log & payload sampai diperbaiki): %s",
-                    name, e,
-                )
-                sensors[name] = NullSensor(name, str(e))
-
+    # Import each driver independently: one missing library must not disable
+    # the other sensors or prevent local alarms from starting.
+    from importlib import import_module
+    factories = {
+        "pressure": ("sensors.pressure", "PressureWaterSensor"),
+        "rain": ("sensors.rainfall", "RainfallSensor"),
+        "distance": ("sensors.JSN_SR04T", "JSN_SR04T"),
+        "flow": ("sensors.YF_S201", "YFS201"),
+        "battery": ("sensors.battery", "BatterySensor"),
+        "bme": ("sensors.bme280_sensor", "BME280Sensor"),
+        "wind": ("sensors.wind_speed", "WindSpeedSensor"),
+        "wind_dir": ("sensors.wind_direction", "WindDirectionSensor"),
+    }
+    sensors = {}
+    for name, (module, class_name) in factories.items():
+        sensor = None
         try:
-            alarm = AlarmController()
-        except Exception as e:
-            logger.error(
-                "Alarm controller (relay/sirine) GAGAL diinisialisasi — alarm lokal "
-                "dinonaktifkan (sistem tetap jalan, hanya sirine yang tidak menyala): %s", e,
-            )
-            alarm = NullAlarmController(str(e))
+            sensor = getattr(import_module(module), class_name)()
+            if name == "rain":
+                sensor.initialize()
+            sensors[name] = sensor
+        except Exception as error:
+            if sensor is not None and hasattr(sensor, "close"):
+                try:
+                    sensor.close()
+                except Exception:
+                    logger.exception("Failed to close %s after initialization error", name)
+            logger.error("Sensor %s unavailable: %s", name, error)
+            sensors[name] = NullSensor(name, str(error))
+    try:
+        from alarm.siren import AlarmController
+        alarm = AlarmController()
+    except Exception as error:
+        logger.error("Local siren unavailable: %s", error)
+        alarm = NullAlarmController(str(error))
+    return sensors, alarm
 
-        return sensors, alarm
+
+def _number(value):
+    return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value)
 
 
-# ─── Threshold helpers ───────────────────────────────────────────
-def _load_hardcoded_thresholds() -> dict:
-    with open(settings.THRESHOLDS_PATH) as f:
-        return json.load(f)
+def _load_hardcoded_thresholds():
+    with open(settings.THRESHOLDS_PATH, encoding="utf-8") as file:
+        thresholds = json.load(file)
+    if "waterDangerThreshold" not in thresholds:
+        thresholds["waterDangerThreshold"] = thresholds.get("pressureDepthDangerThreshold")
+    for key in ("waterDangerThreshold", "rainfallDangerThreshold"):
+        value = thresholds.get(key)
+        if not _number(value) or value < 0:
+            raise ValueError(f"{key} must be a finite, nonnegative number")
+    required = thresholds.get("alarm", {}).get("consecutive_readings_required", 3)
+    if isinstance(required, bool) or not isinstance(required, int) or required < 1:
+        raise ValueError("consecutive_readings_required must be a positive integer")
+    return thresholds
 
 
-def _exceeds(value, danger, lower_is_worse) -> bool:
-    """True kalau value melewati danger threshold. None value -> selalu False (unknown, bukan alarm)."""
-    if value is None or danger is None:
+def _exceeds(value, danger, lower_is_worse=False):
+    if not _number(value) or not _number(danger):
         return False
-    return (value <= danger) if lower_is_worse else (value >= danger)
+    return value <= danger if lower_is_worse else value >= danger
 
 
-# ─── Main class ──────────────────────────────────────────────────
 class EFWS:
     def __init__(self):
         self.hardcoded_thresholds = _load_hardcoded_thresholds()
-        self.sensors, self.alarm  = _load_sensors_and_alarm()
-        self.api                  = APIPublisher()
-        self.db                   = DBManager()
-
+        self.db = DBManager()
+        self.api = APIPublisher()
+        self.api.command_handler = self._process_commands
+        self.sensors, self.alarm = _load_sensors_and_alarm()
+        self.sim = None
         self._critical_streak = 0
         self._stop_flag = threading.Event()
-
-        # ─── State bersama antar-thread untuk 3 scheduler independen ──
-        # Emergency Mode: SATU sumber kebenaran (di-set/clear HANYA oleh
-        # sampling loop). Location & Heartbeat TIDAK PERNAH membaca ini --
-        # cuma Telemetry Publisher yang membaca untuk memilih interval.
-        self._emergency = threading.Event()
-
-        # Menandakan bahwa Telemetry Publisher harus melakukan
-        # Immediate Emergency Send (sekali saja saat transisi
-        # NORMAL -> EMERGENCY).
-        self._emergency_immediate_send = threading.Event()
-
-        # Dipakai sampling loop untuk membangunkan Telemetry Publisher
-        # SEKETIKA saat baru masuk Emergency Mode, tanpa menunggu sisa
-        # waktu tunggu interval normal (30 menit) habis dulu.
-        self._telemetry_wake = threading.Event()
-        # Snapshot data sensor TERBARU dari sampling loop --
-        # dibaca oleh Telemetry Publisher tiap kali dia mau kirim (bukan
-        # baca sensor sendiri, supaya "sensor sampling" tetap satu-satunya
-        # yang menyentuh hardware sensor).
-        self._startup_telemetry_sent = False
-        self._data_lock = threading.Lock()
-        self._latest_data = None
-        # Baseline utk hitung "rainfall sejak pengiriman telemetry SEBELUMNYA"
-        # (delta dari counter kumulatif sensor) -- HANYA di-update tiap kali
-        # Telemetry Publisher benar-benar kirim, bukan tiap siklus sampling.
-        self._last_rainfall_total_mm = None
-
+        self._upload_event = threading.Event()
+        self._last_routine_send = None
+        self._last_rainfall_total_mm = self.db.get_rainfall_baseline(settings.DEVICE_ID)
+        self._threads = []
+        self._closed = False
         self._location = {
-            "lat":    settings.DEVICE_LOCATION["lat"],
-            "lon":    settings.DEVICE_LOCATION["lon"],
-            "source": "config",
-            "fix":    False,
+            "lat": settings.DEVICE_LOCATION["lat"],
+            "lon": settings.DEVICE_LOCATION["lon"],
+            "source": "config", "fix": False,
         }
-        # Kapan GPS TERAKHIR KALI benar-benar dapat fix (epoch seconds).
-        # None = belum pernah sama sekali sejak EFWS ini start. Device ini
-        # terpasang PERMANEN di satu titik -- jadi kalau GPS gagal fix di
-        # suatu siklus, jauh lebih masuk akal pakai posisi fix TERAKHIR yang
-        # diketahui daripada langsung jatuh ke koordinat statis di config.
-        self._last_gps_fix_at = None
 
-        logger.info("EFWS initialised. Device: %s | Mode: %s | GPS cache: %s",
-                    settings.DEVICE_ID, settings.RUN_MODE,
-                    settings.GPS_CACHE_FILE)
-
-        # Thread terpisah khusus retry offline queue tiap
-        # EFWS_CONNECTIVITY_CHECK_SEC (2 menit) -- SENGAJA independen dari
-        # siklus baca sensor (3 menit), supaya requirement "retry every
-        # 2 minutes" tetap terpenuhi persis walau siklus baca lebih lambat.
-        self._flush_thread = threading.Thread(target=self._flush_queue_loop, daemon=True)
-        self._flush_thread.start()
-
-        # Thread terpisah: auto-purge data lokal (SQLite) yang lebih tua
-        # dari EFWS_DB_RETENTION_DAYS (default 3 hari), dicek tiap
-        # EFWS_DB_RETENTION_CHECK_SEC (default 6 jam) -- independen dari
-        # siklus baca sensor maupun retry offline queue.
-        self._retention_thread = threading.Thread(target=self._retention_loop, daemon=True)
-        self._retention_thread.start()
-
-        # ─── 3 scheduler endpoint, masing-masing thread sendiri ───────
-        # Tidak ada scheduler yang memanggil scheduler lain. Kegagalan di
-        # satu publisher tidak pernah menghentikan publisher lainnya
-        # (masing-masing punya try/except sendiri di loop-nya).
-        self._location_thread = threading.Thread(target=self._location_loop, daemon=True)
-        self._location_thread.start()
-
-        self._telemetry_thread = threading.Thread(target=self._telemetry_loop, daemon=True)
-        self._telemetry_thread.start()
-
-        self._heartbeat_thread = threading.Thread(target=self._heartbeat_loop, daemon=True)
-        self._heartbeat_thread.start()
-
-    # ─── Background: retry offline queue, independen dari siklus baca ──
     def _flush_queue_loop(self):
-        interval = settings.EFWS_CONNECTIVITY_CHECK_SEC
-        while not self._stop_flag.is_set():
-            try:
-                self.api.flush_queue(self.db)
-            except Exception:
-                logger.error("Flush queue thread error:\n%s", traceback.format_exc())
-            self._stop_flag.wait(interval)
+        # Only this thread uses the HTTP session. Bundles are already in SQLite.
+        try:
+            while not self._stop_flag.is_set():
+                self._upload_event.clear()
+                try:
+                    while not self._stop_flag.is_set() and self.api.flush_queue(self.db):
+                        pass
+                except Exception:
+                    logger.exception("Upload worker failed; queued data retained")
+                self._upload_event.wait(settings.EFWS_CONNECTIVITY_CHECK_SEC)
+        finally:
+            self.api.close()
 
-    # ─── Background: auto-hapus data lokal lebih dari N hari (default 3) ──
     def _retention_loop(self):
-        days = settings.DB_RETENTION_DAYS
-        interval = settings.DB_RETENTION_CHECK_SEC
         while not self._stop_flag.is_set():
             try:
-                result = self.db.purge_old_data(days=days)
-                if result["sensor_readings_deleted"] or result["api_queue_deleted"] or result["location_log_deleted"]:
-                    logger.info(
-                        "🧹 Retention: hapus %d baris sensor_readings, %d baris api_queue, "
-                        "%d baris location_log (lebih tua dari %d hari).",
-                        result["sensor_readings_deleted"],
-                        result["api_queue_deleted"],
-                        result["location_log_deleted"],
-                        days,
-                    )
+                self.db.purge_old_data(settings.DB_RETENTION_DAYS)
             except Exception:
-                logger.error("Retention thread error:\n%s", traceback.format_exc())
-            self._stop_flag.wait(interval)
+                logger.exception("Database retention failed")
+            self._stop_flag.wait(settings.DB_RETENTION_CHECK_SEC)
 
-    # ─── Publisher 1/3: Location -- SELALU tiap 30 menit, tidak pernah
-    # terpengaruh Emergency Mode. GPS HANYA diambil di sini, tepat sebelum
-    # kirim (bukan di sampling loop) -- sesuai spec. ──────────────────
-    def _location_loop(self):
-        interval = settings.LOCATION_INTERVAL_SEC
-        while not self._stop_flag.is_set():
-            try:
+    def _gps_loop(self):
+        try:
+            while not self._stop_flag.is_set():
+                if self.sim is None:
+                    self.sim = _load_sim()
                 self._update_gps()
-                payload = self._build_location_payload()
-                logger.info(
-                    "📍 [Location Publisher] lat=%s, lon=%s | source=%s (%s)",
-                    self._location.get("lat"), self._location.get("lon"),
-                    self._location.get("source"),
-                    {
-                        "gps":        "GPS asli, fix BARU siklus ini",
-                        "gps_cached": "GPS asli, TAPI posisi LAMA (fix terakhir yang diketahui, dikirim ulang)",
-                        "config":     "fallback statis dari config, BELUM PERNAH dapat GPS fix",
-                    }.get(self._location.get("source"), self._location.get("source")),
-                )
-                # Dicatat SEBELUM kirim (sama seperti pola Telemetry) -- supaya
-                # riwayat "device pernah lapor posisi ini pada waktu ini" tetap
-                # ada di lokal walau pengiriman ke API gagal & masuk offline queue.
-                self.db.log_location(self._location, payload)
-                self.api.send_location(payload, db=self.db)
-            except Exception:
-                logger.error("Location Publisher error (tidak mempengaruhi Telemetry/Heartbeat):\n%s",
-                             traceback.format_exc())
-            self._stop_flag.wait(interval)
+                self._stop_flag.wait(settings.GPS_INTERVAL_SEC)
+        finally:
+            if self.sim is not None:
+                self.sim.close()
 
-    # ─── Publisher 2/3: Telemetry -- SATU scheduler, interval ADAPTIF:
-    # 30 menit saat NORMAL, 10 menit selama Emergency Mode aktif. Inilah
-    # satu-satunya tempat data disimpan ke SQLite. Dibangunkan seketika
-    # (lewat _telemetry_wake) saat Emergency Mode baru dimulai. ────────
-    def _telemetry_loop(self):
-        while not self._stop_flag.is_set():
-            interval = (
-                settings.EMERGENCY_TELEMETRY_INTERVAL_SEC
-                if self._emergency.is_set()
-                else settings.TELEMETRY_INTERVAL_SEC
-            )
-            self._telemetry_wake.wait(timeout=interval)
-            self._telemetry_wake.clear()
-            if self._stop_flag.is_set():
-                break
-
-            with self._data_lock:
-                data = self._latest_data
-            if data is None:
-                # Belum ada satu pun siklus sampling yang selesai -- tunggu
-                # sebentar lagi daripada kirim payload kosong.
-                continue
-
-            immediate_send = self._emergency_immediate_send.is_set()
-            if immediate_send:
-                self._emergency_immediate_send.clear()
-
-            try:
-                payload = self._build_telemetry_payload(data)
-                # Simpan ke DB lokal SEBELUM dikirim (sumber kebenaran lokal,
-                # dan untuk audit -- full_payload berisi PERSIS body yang
-                # dikirim ke API). Dibersihkan otomatis oleh _retention_loop.
-                self.db.log_reading(data, payload)
-
-                if immediate_send:
-                    logger.warning(
-                        "[Telemetry Publisher] Immediate Emergency Send"
-                    )
-
-                elif self._emergency.is_set():
-                    logger.warning(
-                        "[Telemetry Publisher] Emergency Scheduled Send "
-                        "(interval=%ds)",
-                        settings.EMERGENCY_TELEMETRY_INTERVAL_SEC,
-                    )
-
-                else:
-                    logger.info(
-                        "[Telemetry Publisher] Normal Scheduled Send "
-                        "(interval=%ds)",
-                        settings.TELEMETRY_INTERVAL_SEC,
-                    )
-                    
-                self.api.send_telemetry(payload, db=self.db)
-
-                pending = self.db.count_pending_queue()
-                if pending:
-                    logger.info("📦 %d item masih di offline queue (di-retry thread terpisah).", pending)
-            except Exception:
-                logger.error("Telemetry Publisher error (tidak mempengaruhi Location/Heartbeat):\n%s",
-                             traceback.format_exc())
-
-    # ─── Publisher 3/3: Heartbeat -- SELALU tiap 5 menit, tidak pernah
-    # bergantung ke Telemetry/Location/Emergency Mode. Endpoint 4 (command
-    # ACK) HANYA jalan dari sini, event-driven, kalau ada 'commands'. ──
-    def _heartbeat_loop(self):
-        interval = settings.HEARTBEAT_INTERVAL_SEC
-        while not self._stop_flag.is_set():
-            try:
-                with self._data_lock:
-                    data = self._latest_data or {}
-                payload = self._build_heartbeat_payload(data)
-                delivered, commands = self.api.send_heartbeat(payload, db=self.db)
-                if delivered and commands:
-                    self._process_commands(commands)
-            except Exception:
-                logger.error("Heartbeat Publisher error (tidak mempengaruhi Location/Telemetry):\n%s",
-                             traceback.format_exc())
-            self._stop_flag.wait(interval)
-
-    # ─── GPS refresh (baca cache dari ews_network_setup/gps_refresh.sh) ────
     def _update_gps(self):
-        """
-        Baca posisi GPS dari cache file yang ditulis oleh:
-          - ews_network_setup.sh (saat boot)
-          - gps_refresh.sh (setiap 30 menit via systemd timer)
-
-        main.py TIDAK membuka serial port AT command secara langsung.
-        GPS fetch adalah tanggung jawab script bash, bukan Python.
-
-        Fallback chain:
-          1) Cache file ada + fix=true  → pakai koordinat dari cache
-          2) Cache file ada + fix=false  → pakai posisi lama (gps_cached)
-          3) Tidak ada cache sama sekali  → pakai .env (config)
-        """
-        if settings.RUN_MODE == "mock":
-            # Mode mock: generate posisi simulasi
-            self._location = {
-                "lat":    settings.DEVICE_LOCATION["lat"] or -1.265400,
-                "lon":    settings.DEVICE_LOCATION["lon"] or 116.831200,
-                "altitude_m": 8.2,
-                "source": "mock",
-                "fix":    True,
-            }
-            self._last_gps_fix_at = time.time()
-            logger.info("📍 [GPS] Mode MOCK: lat=%.6f, lon=%.6f",
-                        self._location["lat"], self._location["lon"])
+        if self.sim is None:
             return
+        try:
+            result = self.sim.get_gps(timeout=settings.GPS_TIMEOUT)
+            lat, lon = result.get("lat"), result.get("lon")
+            if result.get("fix") and _number(lat) and _number(lon) and -90 <= lat <= 90 and -180 <= lon <= 180:
+                self._location = {"lat": lat, "lon": lon, "source": "gps", "fix": True}
+            else:
+                self._location = {**self._location, "fix": False, "source": "last-known/config"}
+        except Exception:
+            self._location = {**self._location, "fix": False, "source": "last-known/config"}
+            logger.exception("GPS failed; retaining last known/configured location")
 
-        result = _read_gps_cache()
-
-        if result is not None:
-            # Ada fix dari cache
-            cache_age_min = (time.time() - result.get("timestamp", 0)) / 60
-            self._location = {
-                "lat":        result["lat"],
-                "lon":        result["lon"],
-                "altitude_m": result.get("altitude_m"),
-                "source":     "gps",
-                "fix":        True,
-            }
-            self._last_gps_fix_at = result.get("timestamp") or time.time()
-            logger.info(
-                "📍 [GPS] Cache valid — lat=%.6f, lon=%.6f | usia cache: %.1f menit",
-                result["lat"], result["lon"], cache_age_min,
-            )
-        else:
-            self._gps_fallback(reason="Cache GPS tidak ada atau fix=false")
-
-
-    def _gps_fallback(self, reason: str):
-        """
-        Dipanggil kalau GPS gagal fix (semua percobaan habis) ATAU modem
-        tidak tersedia sama sekali. Prioritas:
-          1) Kalau PERNAH dapat fix sebelumnya -- device ini terpasang
-             PERMANEN di satu titik, jadi posisi lama kemungkinan besar
-             MASIH akurat. Pakai itu (source="gps_cached"), JANGAN diam-diam
-             ganti ke koordinat statis config.
-          2) Kalau BELUM PERNAH dapat fix sama sekali sejak start -- baru
-             jatuh ke koordinat statis DEVICE_LOCATION dari config.
-        """
-        if self._last_gps_fix_at is not None:
-            age_min = (time.time() - self._last_gps_fix_at) / 60
-            self._location["source"] = "gps_cached"
-            self._location["fix"] = False  # bukan fix BARU siklus ini, tapi posisi lama yang diketahui
-            logger.warning(
-                "📍 %s -- kirim ULANG posisi GPS TERAKHIR yang diketahui "
-                "(usia %.1f menit): lat=%s, lon=%s. (Device diasumsikan diam "
-                "di satu titik, jadi posisi lama ini kemungkinan besar masih benar.)",
-                reason, age_min, self._location.get("lat"), self._location.get("lon"),
-            )
-        else:
-            self._location = {
-                "lat":    settings.DEVICE_LOCATION["lat"],
-                "lon":    settings.DEVICE_LOCATION["lon"],
-                "source": "config",
-                "fix":    False,
-            }
-            logger.warning(
-                "📍 %s -- BELUM PERNAH dapat GPS fix sejak start, pakai "
-                "koordinat statis dari config: lat=%s, lon=%s.",
-                reason, self._location["lat"], self._location["lon"],
-            )
-
-    # ─── Sensor reads ────────────────────────────────────────────
-    def _read_all(self) -> dict:
+    def _read_all(self):
         data = {}
-        failed = []
         for key, sensor in self.sensors.items():
             try:
-                data[key] = sensor.read()
-                logger.debug("Sensor '%s' read: %s", key, data[key])
-            except Exception as e:
-                logger.error("Sensor '%s' read error: %s", key, e)
-                data[key] = {"error": str(e)}
-
-            if isinstance(data[key], dict) and data[key].get("error"):
-                failed.append(key)
-
-        # Ringkasan per-siklus: sensor mana saja yang tidak terbaca/kosong
-        # siklus ini -> field-nya otomatis jadi 0/null di evaluasi & payload
-        # (lihat _exceeds, _build_telemetry_payload).
-        if failed:
-            logger.warning(
-                "⚠️ Sensor TIDAK TERBACA/KOSONG siklus ini (nilai=0/null): %s",
-                ", ".join(failed),
-            )
-
+                reading = sensor.read()
+                if key == "distance" and not isinstance(reading, dict):
+                    reading = {"distance_m": reading}
+                if not isinstance(reading, dict):
+                    raise TypeError("Invalid sensor response")
+                if any(isinstance(v, float) and not math.isfinite(v) for v in reading.values()):
+                    raise ValueError("Sensor returned a nonfinite value")
+                if reading.get("fault_open_loop") or reading.get("fault_out_of_range"):
+                    reading = {**reading, "depth_m": None, "pressure_bar": None,
+                               "error": "Pressure current loop outside valid measurement range"}
+                if key == "distance" and reading.get("distance_m") is None and not reading.get("error"):
+                    raise ValueError("No ultrasonic echo")
+                data[key] = reading
+                if reading.get("error"):
+                    logger.warning("Sensor %s: %s", key, reading["error"])
+            except Exception as error:
+                logger.warning("Sensor %s read failed: %s", key, error)
+                data[key] = NullSensor(key, str(error)).read()
+        data["_timestamp"] = datetime.now(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z")
         return data
 
-    # ─── Evaluate (single-tier: exceeded / not, sesuai kontrak API) ──
-    def _evaluate(self, data: dict):
-        """
-        Threshold aktif = merge remote config (dari response telemetry
-        terakhir) dengan hardcoded lokal, per-field (lihat threshold_resolver).
-        Return: (any_triggered: bool, triggered: list[str])
-        """
-        t = resolve_active_thresholds(self.hardcoded_thresholds, self.api.remote_config)
-        
+    def _ultrasonic_depth(self, data):
+        distance = data.get("distance", {}).get("distance_m")
+        height = settings.ULTRASONIC_MOUNT_HEIGHT_M
+        if _number(distance) and _number(height) and 0 <= distance <= height:
+            return round(height - distance, 3)
+        return None
+
+    def _evaluate(self, data):
+        thresholds = resolve_active_thresholds(self.hardcoded_thresholds, self.api.remote_config)
+        pressure = data.get("pressure", {})
+        pressure_depth = pressure.get("depth_m") if not pressure.get("error") else None
         checks = {
-            "bme_temp_c":        _exceeds(data["bme_sensor"].get("temperature_c"), t["temperatureDangerThreshold"], lower_is_worse=False),
-            "bme_humidity_pct":  _exceeds(data["bme_sensor"].get("humidity_percent"), t["humidityDangerThreshold"], lower_is_worse=True),
-            "sps_depth_m":       _exceeds(data["sps_sensor"].get("depth_m"), t["waterDangerThreshold"], lower_is_worse=True),
-            "sps_pressure_bar":  _exceeds(data["sps_sensor"].get("pressure_bar"), t["pressureDangerThreshold"], lower_is_worse=True),
-            "wind_speed":        _exceeds(data["wind_speed_sensor"].get("speed_ms"), t["windDangerThreshold"], lower_is_worse=False),
-            "flow_lpm":          _exceeds(data["flow_sensor"].get("flow_lpm"), t["flowRateDangerThreshold"], lower_is_worse=False),
-            "distance_m":        _exceeds(data["distance_sensor"].get("distance_m"), t["waterDangerThreshold"], lower_is_worse=True),
-            
-            # rainfall_last_hour_mm (BUKAN delta-sejak-telemetry) -- lihat
-            # _rainfallDangerThreshold_note di thresholds.json kenapa beda
-            # dari nilai "rainfall" yang dikirim di payload API.
-            "rainfall":          _exceeds(data["rainfall_sensor"].get("rainfall_last_hour_mm"), t["rainfallDangerThreshold"], lower_is_worse=False),
+            "water": _exceeds(pressure_depth, thresholds["waterDangerThreshold"]),
+            "ultrasonic_water": _exceeds(self._ultrasonic_depth(data), thresholds["waterDangerThreshold"]),
+            "rainfall": _exceeds(data.get("rain", {}).get("rainfall_last_hour_mm"),
+                                 thresholds["rainfallDangerThreshold"]),
         }
+        bme = data.get("bme", {})
+        checks.update({
+            "bme_temp_c": _exceeds(bme.get("temperature_c"), thresholds.get("temperatureDangerThreshold")),
+            "bme_humidity_pct": _exceeds(bme.get("humidity_percent"), thresholds.get("humidityDangerThreshold"), True),
+            "wind_speed": _exceeds(data.get("wind", {}).get("speed_ms"), thresholds.get("windDangerThreshold")),
+            "flow_lpm": _exceeds(data.get("flow", {}).get("flow_lpm"), thresholds.get("flowRateDangerThreshold")),
+            "sps_pressure_bar": _exceeds(pressure.get("pressure_bar") if not pressure.get("error") else None,
+                                         thresholds.get("pressureDangerThreshold")),
+        })
+        if settings.ULTRASONIC_MOUNT_HEIGHT_M is None:
+            checks["distance_m"] = _exceeds(data.get("distance", {}).get("distance_m"),
+                                           thresholds.get("distanceDangerThreshold"), True)
+        triggered = [name for name, active in checks.items() if active]
+        return bool(triggered), triggered
 
-        triggered = [k for k, v in checks.items() if v]
-        return (len(triggered) > 0), triggered
+    def _identity(self):
+        return {"deviceId": settings.DEVICE_ID, "deviceToken": settings.DEVICE_TOKEN}
 
-    # ─── Payload builders (kontrak backend, endpoint 1/2/3/4) ────
-    def _build_location_payload(self) -> dict:
-        return {
-            "deviceId":    settings.DEVICE_ID,
-            "deviceToken": settings.DEVICE_TOKEN,
-            "latitude":    self._location["lat"],
-            "longitude":   self._location["lon"],
-        }
+    def _build_location_payload(self):
+        location = self._location  # GPS replaces the whole snapshot atomically.
+        return {**self._identity(), "latitude": location["lat"], "longitude": location["lon"]}
 
-    # ─── Hitung rainfall delta sejak pengiriman telemetry SEBELUMNYA ──
+    def _build_telemetry_payload(self, data):
+        pressure = data.get("pressure", {})
+        rain = data.get("rain", {})
+        flow = data.get("flow", {})
+        battery = data.get("battery", {})
+        bme = data.get("bme", {})
+        wind = data.get("wind", {})
+        wind_dir = data.get("wind_dir", {})
+        return {**self._identity(), "telemetry": [{
+            "timestamp": data["_timestamp"],
+            "bme_temp_c": bme.get("temperature_c"),
+            "bme_humidity_pct": bme.get("humidity_percent"),
+            "bme_pressure_hpa": bme.get("pressure_hpa"),
+            "sps_depth_m": pressure.get("depth_m") if not pressure.get("error") else None,
+            "sps_pressure_bar": pressure.get("pressure_bar") if not pressure.get("error") else None,
+            "wind_speed_ms": wind.get("speed_ms"),
+            "wind_dir": wind_dir.get("direction_abbr"),
+            "flow_lpm": flow.get("flow_lpm"),
+            "distance_m": data.get("distance", {}).get("distance_m"),
+            "battery_pct": battery.get("percent"),
+            "rainfall": self._rainfall_delta(rain.get("rainfall_total_mm")),
+        }]}
+
     def _rainfall_delta(self, total_mm):
+        """Rain since the previous durable telemetry snapshot, not the last sample.
+
+        Building a payload is read-only. Advance the baseline only after its
+        upload bundle and baseline are committed together to SQLite.
         """
-        total_mm: rainfall_total_mm SAAT INI (counter kumulatif dari sensor,
-        selalu naik/tidak pernah reset sendiri kecuali di-set manual).
-        Return: mm yang turun sejak panggilan TERAKHIR method ini (yaitu
-        sejak telemetry SEBELUMNYA benar-benar dikirim) -- None kalau
-        sensor tidak tersedia (NullSensor), 0.0 di pengiriman PERTAMA
-        (belum ada baseline pembanding).
-        """
-        if total_mm is None:
+        if not _number(total_mm) or total_mm < 0:
             return None
         if self._last_rainfall_total_mm is None:
-            delta = 0.0
-        else:
-            delta = max(0.0, round(total_mm - self._last_rainfall_total_mm, 4))
-        self._last_rainfall_total_mm = total_mm
-        return delta
+            return 0.0
+        return max(0.0, round(total_mm - self._last_rainfall_total_mm, 4))
 
-    def _build_telemetry_payload(self, data) -> dict:
-        bme        = data.get("bme_sensor", {})
-        sps        = data.get("sps_sensor", {})
-        wind_speed = data.get("wind_speed_sensor", {})
-        wind_dir   = data.get("wind_dir_sensor", {})
-        flow       = data.get("flow_sensor", {})
-        distance   = data.get("distance_sensor", {})
-        battery    = data.get("battery_sensor", {})
-        rainfall   = data.get("rainfall_sensor", {})
-        
-        timestamp = (
-            datetime.now(UTC)
-            .isoformat(timespec="milliseconds")
-            .replace("+00:00", "Z")
-        )
+    def _build_heartbeat_payload(self, data):
+        return {**self._identity(), "batteryLevel": data.get("battery", {}).get("percent")}
 
-        return {
-            "deviceId": settings.DEVICE_ID,
-            "deviceToken": settings.DEVICE_TOKEN,
-            "telemetry": [
-                {
-                    "timestamp": timestamp,
-                    "bme_temp_c": bme.get("temperature_c"),
-                    "bme_humidity_pct": bme.get("humidity_percent"),
-                    "bme_pressure_hpa": bme.get("pressure_hpa"),
-                    "sps_depth_m": sps.get("depth_m"),
-                    "sps_pressure_bar": sps.get("pressure_bar"),
-                    "wind_speed_ms": wind_speed.get("speed_ms"),
-                    "wind_dir": wind_dir.get("direction_abbr"),
-                    "flow_lpm": flow.get("flow_lpm"),
-                    "distance_m": distance.get("distance_m"),
-                    "battery_pct": battery.get("percent"),
-                    
-                    # "rainfall" = mm hujan SEJAK pengiriman telemetry SEBELUMNYA
-                    # (delta dari counter kumulatif rainfall_total_mm), BUKAN
-                    # window 1-jam bawaan sensor -- supaya angkanya selalu pas
-                    # dengan periode kirim yang sebenarnya (30 menit normal /
-                    # 10 menit darurat), bukan window tetap yang tidak sinkron.
-                    "rainfall": self._rainfall_delta(rainfall.get("rainfall_total_mm")),
-                }
-            ],
-        }
+    def _build_ack_payload(self, command_id, status, error=""):
+        return {**self._identity(), "commandId": command_id, "status": status, "error": error}
 
-    def _build_heartbeat_payload(self, data) -> dict:
-        return {
-            "deviceId":     settings.DEVICE_ID,
-            "deviceToken":  settings.DEVICE_TOKEN,
-            "batteryLevel": data.get("battery_sensor", {}).get("percent"),
-        }
+    def _handle_alarm(self, any_triggered, triggered):
+        required = self.hardcoded_thresholds.get("alarm", {}).get("consecutive_readings_required", 3)
+        self._critical_streak = min(self._critical_streak + 1, required) if any_triggered else 0
+        active = self._critical_streak >= required
+        self.alarm.set_level("critical" if active else "none")
+        if active:
+            logger.warning("Local flood alarm: %s", triggered)
 
-    def _build_ack_payload(self, command_id: str, status: str, error: str = "") -> dict:
-        return {
-            "deviceId":    settings.DEVICE_ID,
-            "deviceToken": settings.DEVICE_TOKEN,
-            "commandId":   command_id,
-            "status":      status,
-            "error":       error,
-        }
+    def _send_bundle(self, data, reason, telemetry_payload=None):
+        location = self._location
+        location_payload = {**self._identity(), "latitude": location["lat"], "longitude": location["lon"]}
+        self.db.log_location(location, location_payload)
+        total_mm = data.get("rain", {}).get("rainfall_total_mm")
+        total_mm = total_mm if _number(total_mm) and total_mm >= 0 else None
+        self.db.queue_bundle([
+            (settings.location_endpoint(), location_payload),
+            (settings.telemetry_endpoint(), telemetry_payload or self._build_telemetry_payload(data)),
+            (settings.heartbeat_endpoint(), self._build_heartbeat_payload(data)),
+        ], rainfall_total_mm=total_mm, device_id=settings.DEVICE_ID)
+        if total_mm is not None:
+            self._last_rainfall_total_mm = total_mm
+        self._upload_event.set()
+        logger.info("Queued location, telemetry and heartbeat: %s", reason)
 
-    # ─── Alarm handler LOKAL (sirine real-time) + single source of truth
-    # untuk status Emergency Mode yang dipakai Telemetry Publisher ─────
-    def _handle_alarm(self, any_triggered: bool, triggered: list):
-        cfg      = self.hardcoded_thresholds.get("alarm", {})
-        required = cfg.get("consecutive_readings_required", 3)
-
-        self._critical_streak = (self._critical_streak + 1) if any_triggered else 0
-        self.alarm.set_level("critical" if any_triggered else "normal")
-
-        was_emergency = self._emergency.is_set()
-        now_emergency = any_triggered and self._critical_streak >= required
-
-        if now_emergency and not was_emergency:
-            logger.warning("🔴 ALARM (lokal, sirine menyala) — %d bacaan berturut: %s -- "
-                           "MASUK EMERGENCY MODE, Telemetry Publisher dibangunkan sekarang.",
-                           self._critical_streak, triggered)
-            self._emergency.set()
-            # Immediate telemetry hanya SATU KALI
-            self._emergency_immediate_send.set()
-            self._telemetry_wake.set()  # bangunkan Telemetry Publisher SEKARANG, jangan tunggu interval lama habis
-        elif not now_emergency and was_emergency:
-            logger.warning("🟢 Semua nilai kembali NORMAL -- KELUAR EMERGENCY MODE, "
-                           "Telemetry Publisher kembali ke jadwal 30 menit.")
-            self._emergency.clear()
-
-    # ─── Endpoint 4: eksekusi command dari heartbeat, lalu ACK ───
-    def _process_commands(self, commands: list):
-        for cmd in commands:
-            command_id = cmd.get("id", "")
-            command_name = cmd.get("command", "")
-            logger.warning("📥 Command diterima dari backend: id=%s command=%s", command_id, command_name)
-
-            handler = self._COMMAND_HANDLERS.get(command_name)
-            if handler is None:
-                logger.error("Command '%s' tidak dikenal.", command_name)
-                ack = self._build_ack_payload(command_id, "FAILED", f"Unknown command: {command_name}")
-                self.api.send_command_ack(ack, db=self.db)
+    def _process_commands(self, commands):
+        for command in commands:
+            if not isinstance(command, dict):
                 continue
-
+            command_id = command.get("id", "")
+            name = command.get("command", "")
             try:
-                handler(self)
+                if name != "Reboot":
+                    raise ValueError(f"Unknown command: {name}")
+                self._cmd_reboot()
                 ack = self._build_ack_payload(command_id, "SUCCESS")
-            except Exception as e:
-                logger.error("Command '%s' gagal: %s", command_name, e)
-                ack = self._build_ack_payload(command_id, "FAILED", str(e))
-
-            self.api.send_command_ack(ack, db=self.db)
+            except Exception as error:
+                ack = self._build_ack_payload(command_id, "FAILED", str(error))
+            self.db.queue_api(settings.command_ack_endpoint(), ack)
+            self._upload_event.set()
 
     def _cmd_reboot(self):
-        """
-        CATATAN ARSITEKTUR PENTING:
-        Spec minta "execute -> wait until complete -> baru kirim ACK". Untuk
-        command Reboot ini SECARA TEKNIS TIDAK MUNGKIN dipenuhi literal:
-        begitu `systemctl restart efws.service` dieksekusi, proses Python
-        yang sedang jalan (proses ini sendiri) akan dibunuh SEBELUM sempat
-        mengirim ACK "setelah selesai".
-
-        Solusi yang dipakai: dispatch restart lewat proses child yang
-        DETACHED dengan delay singkat (EFWS_REBOOT_DELAY_SEC, default 5s),
-        lalu anggap "berhasil" begitu restart itu terjadwal (bukan setelah
-        restart benar-benar selesai) -- ACK SUCCESS dikirim oleh caller
-        (_process_commands) SEGERA setelah fungsi ini return, memberi waktu
-        ACK terkirim ke backend sebelum proses ini benar-benar mati.
-        """
-        delay = settings.COMMAND_REBOOT_DELAY_SEC
-        logger.warning("🔄 Reboot dijadwalkan %ds lagi (setelah ACK dikirim)...", delay)
+        if settings.RUN_MODE == "mock":
+            logger.info("MOCK Reboot command: service restart simulated")
+            return
+        delay = max(1, settings.COMMAND_REBOOT_DELAY_SEC)
+        # ACK means the service restart was scheduled, not that it completed.
         subprocess.Popen(
-            ["setsid", "bash", "-c", f"sleep {delay} && sudo -n systemctl restart efws.service"],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            stdin=subprocess.DEVNULL,
-            start_new_session=True,
+            ["bash", "-c", f"sleep {delay} && sudo -n systemctl restart efws.service"],
+            stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL, start_new_session=True,
         )
 
-    _COMMAND_HANDLERS = {
-        "Reboot": _cmd_reboot,
-    }
+    def run_cycle(self):
+        data = self._read_all()
+        triggered, reasons = self._evaluate(data)
+        self._handle_alarm(triggered, reasons)
+        telemetry = self._build_telemetry_payload(data)
+        self.db.log_reading(data, telemetry)
+        now = time.monotonic()
+        if triggered or self._last_routine_send is None or now - self._last_routine_send >= settings.ROUTINE_SEND_INTERVAL_SEC:
+            self._send_bundle(data, "emergency" if triggered else "routine", telemetry)
+            self._last_routine_send = now
+        logger.info("READ depth=%s m distance=%s m flow=%s L/min rain_1h=%s mm battery=%s V | triggers=%s",
+                    telemetry["telemetry"][0]["sps_depth_m"], data["distance"].get("distance_m"),
+                    data["flow"].get("flow_lpm"), data["rain"].get("rainfall_last_hour_mm"),
+                    data["battery"].get("voltage"), reasons)
+        return data
 
-    # ─── Main loop -- SENSOR SAMPLING SAJA (baca + evaluasi threshold).
-    # Tidak kirim ke API, tidak simpan ke SQLite, tidak ambil GPS di sini --
-    # itu semua tugas Location/Telemetry/Heartbeat Publisher masing-masing
-    # di thread sendiri (lihat _location_loop/_telemetry_loop/_heartbeat_loop). ──
     def run(self):
-        logger.info(
-            "EFWS loop started. Sensor sampling tiap: %ds | "
-            "Location: %ds (selalu) | Telemetry: %ds normal / %ds emergency | "
-            "Heartbeat: %ds (selalu) | Retry queue: %ds (thread terpisah)",
-            settings.SENSOR_READ_INTERVAL_SEC,
-            settings.LOCATION_INTERVAL_SEC,
-            settings.TELEMETRY_INTERVAL_SEC,
-            settings.EMERGENCY_TELEMETRY_INTERVAL_SEC,
-            settings.HEARTBEAT_INTERVAL_SEC,
-            settings.EFWS_CONNECTIVITY_CHECK_SEC,
-        )
+        for target in (self._flush_queue_loop, self._retention_loop, self._gps_loop):
+            thread = threading.Thread(target=target, name=target.__name__, daemon=True)
+            self._threads.append(thread)
+            thread.start()
         try:
-            while True:
-                # 1) Baca semua sensor tiap siklus (GPS TIDAK di sini).
-                data = self._read_all()
-
-                # 2) Evaluasi threshold aktif (remote-first, fallback lokal per-field).
-                any_triggered, triggered = self._evaluate(data)
-
-                # 3) Simpan snapshot terbaru supaya Telemetry & Heartbeat
-                #    Publisher (thread lain) selalu punya data segar tanpa
-                #    perlu baca sensor sendiri-sendiri.
-                with self._data_lock:
-                    self._latest_data = data
-                    if not self._startup_telemetry_sent:
-                        self._startup_telemetry_sent = True
-                        self._telemetry_wake.set()
-
-                # 4) Sirine lokal + status Emergency Mode (single source of
-                #    truth untuk Telemetry Publisher) -- selalu dievaluasi
-                #    real-time, independen dari publisher mana pun.
-                self._handle_alarm(any_triggered, triggered)
-
-                if not any_triggered:
-                    bme = data.get("bme_sensor", {})
-
-                    logger.info(
-                        "READ | semua nilai NORMAL. temp=%.1f°C hum=%.1f%%",
-                        bme.get("temperature_c", 0) or 0,
-                        bme.get("humidity_percent", 0) or 0,
-                    )
-
-                time.sleep(settings.SENSOR_READ_INTERVAL_SEC)
-
+            while not self._stop_flag.is_set():
+                started = time.monotonic()
+                self.run_cycle()
+                self._stop_flag.wait(max(0, settings.SENSOR_READ_INTERVAL_SEC - (time.monotonic() - started)))
         except KeyboardInterrupt:
-            logger.info("EFWS dihentikan oleh user (Ctrl+C).")
-        except Exception:
-            logger.critical("EFWS crash!\n%s", traceback.format_exc())
+            logger.info("Stopped by user")
         finally:
-            self._stop_flag.set()
-            self._telemetry_wake.set()  # bangunkan Telemetry Publisher supaya langsung keluar
-            self.alarm.silence()
+            self.close()
+
+    def close(self):
+        if self._closed:
+            return
+        self._closed = True
+        self._stop_flag.set()
+        self._upload_event.set()
+        for resource in [self.alarm, *self.sensors.values()]:
+            cleanup = getattr(resource, "close", None) or getattr(resource, "silence", None)
+            if cleanup:
+                try:
+                    cleanup()
+                except Exception:
+                    logger.exception("Resource cleanup failed")
+        for thread in self._threads:
+            thread.join(timeout=5)
+        if not self._threads:
             self.api.close()
+        if not any(t.is_alive() and t.name != "_gps_loop" for t in self._threads):
             self.db.close()
-            logger.info("EFWS shutdown selesai.")
+        from sensors.mcp3008 import close_mcp3008
+        close_mcp3008()
+
+
+def main():
+    Path(settings.LOG_PATH).parent.mkdir(parents=True, exist_ok=True)
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+                        handlers=[logging.StreamHandler(), logging.FileHandler(settings.LOG_PATH, encoding="utf-8")])
+    app = EFWS()
+    signal.signal(signal.SIGTERM, lambda *_: app._stop_flag.set())
+    app.run()
 
 
 if __name__ == "__main__":
-    efws = EFWS()
-    efws.run()
+    main()
